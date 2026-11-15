@@ -23,5 +23,5 @@ if member not in manifest:
     path.write_text(manifest)
 PYTHON
 cd "$sdk"
-nix-shell -p llvm --run 'scripts/build-app ha-for-cmf 1'
+nix-shell -p llvm --run 'scripts/build-app ha-for-cmf 2'
 cp target/ha-for-cmf.wp2app "$root/.build/"

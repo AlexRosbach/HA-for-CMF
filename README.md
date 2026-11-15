@@ -1,41 +1,32 @@
 # HA for CMF
 
-Control one Home Assistant light or switch from a CMF Watch Pro 2. The watch displays the state reported by Home Assistant and offers a single on/off button. It refreshes the state every three seconds while the app is open.
+Show up to four Home Assistant entities on a CMF Watch Pro 2. Tap a light or switch to turn it on or off. Other entities are read-only and can display a state and unit, such as temperature or humidity.
 
-![Watch mockups showing off, on, updating, and offline](docs/watch-mockups.png)
+![Four entity tiles running in the watch emulator](docs/four-entities.png)
 
-The Mac bridge connects to the watch over Bluetooth LE and to Home Assistant over HTTP(S). Configure your own Home Assistant URL and entity ID. Keep your access token on the Mac.
+The Android phone loads the entity list from Home Assistant and talks to the watch over Bluetooth LE. The phone is the bridge, including while the screen is locked if the foreground service stays connected. The watch does not need the Home Assistant token.
 
-## Requirements
+## Connect on Android
 
-- CMF Watch Pro 2 with [WP2 Apps](https://github.com/cmf-tech-community/wp2-apps) already working, including its app loader. This project does not install watch firmware.
-- Apple Silicon Mac with Bluetooth enabled, plus Git, Python 3.12+, uv, Nix and Rustup.
-- A Home Assistant installation reachable from the Mac, a `light.*` or `switch.*` entity, and a long-lived access token. Use HTTPS when sending the token over an untrusted network. See the [Home Assistant API docs](https://developers.home-assistant.io/docs/api/rest/).
+1. Your watch must already have the [WP2 Apps firmware and loader](https://github.com/cmf-tech-community/wp2-apps). The Android app installs or updates only the bundled HA for CMF watch app. It does not flash firmware.
+2. Download the Android APK from [Releases](https://github.com/AlexRosbach/HA-for-CMF/releases), install it on Android 12 or later, and open **HA for CMF**.
+3. Open your Home Assistant profile. Under **Security → Long-lived access tokens**, create a token for the app. Use an HTTPS URL on untrusted networks. Do not share the token. The Android app keeps it in memory for the active session.
+4. In HA for CMF, enter the URL and token. Tap **Choose entities**, search by friendly name or entity ID, and select one to four entries. The order in which you select them becomes their order on the watch.
+5. Close competing watch apps, such as Nothing X, or disconnect them from the watch. Keep the phone's Bluetooth on. In HA for CMF tap **Find watch**, allow Nearby devices, and select your Watch Pro 2.
+6. Exit any open WP2 app on the watch. On the phone tap **Install or update watch app**. Wait for success, then dismiss the watch's **Paired** notification if shown.
+7. Tap **Start bridge**. When the phone says it is ready, dismiss the watch's **Paired** prompt and open **Custom Apps → ha-for-cmf**. Use **Stop bridge** to end the Bluetooth session or before changing the selection.
 
-## Build and install the watch app
+Long names and states are shortened for the small display. The initial Android release is experimental, and compatibility with Nothing X running alongside it has not been verified. The watch UI has been tested with a simulated BLE bridge. The Android Bluetooth path still needs a physical phone-to-watch test.
+
+## Build from source
+
+For the watch package, use Git, Python, Rustup, uv, and Nix:
 
 ```bash
 rustup target add thumbv7em-none-eabi
 bash build.sh
-cd .build/wp2-apps
-uv run --locked wp2apps scan --show-address
-uv run --locked wp2apps install ../ha-for-cmf.wp2app --address WATCH_UUID
 ```
 
-Substitute the displayed Bluetooth UUID for `WATCH_UUID` and note the numeric slot printed by the installer. Dismiss the watch's **Paired** prompt before starting the bridge.
+For Android, install JDK 17, Android SDK Platform 35, and Android Build-Tools 35. Set `ANDROID_JAR` and `ANDROID_BUILD_TOOLS` to their installed paths. Set `APK_KEYSTORE`, `APK_KEY_ALIAS`, and `APK_KEYSTORE_PASSWORD` to your own signing credentials. Run `bash android/build.sh` after building the watch package.
 
-## Start the bridge
-
-From the same `.build/wp2-apps` directory:
-
-```bash
-read -rs 'HA_TOKEN?Home Assistant token: '
-export HA_TOKEN
-uv run --locked python ../../bridge.py --address WATCH_UUID --slot 0 \
-  --url http://homeassistant.local:8123 --entity light.example
-unset HA_TOKEN
-```
-
-The hidden token prompt above uses macOS's default zsh shell. Replace the URL, example entity ID, and slot with your own. Open **Custom Apps → ha-for-cmf** once the bridge reports that the watch is connected. Dismiss any **Paired** prompt first. Keep the bridge running and the Mac in Bluetooth range. If the phone's companion app is connected, turn off Bluetooth on the phone during the test.
-
-WP2 Apps is an experimental community project. This initial release uses a Mac bridge and supports one configurable entity per running bridge.
+The original single-entity Mac bridge remains available in [v0.1.0](https://github.com/AlexRosbach/HA-for-CMF/releases/tag/v0.1.0).
