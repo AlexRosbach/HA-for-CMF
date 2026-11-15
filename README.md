@@ -2,6 +2,8 @@
 
 Control one Home Assistant light or switch from a CMF Watch Pro 2. The watch displays the state reported by Home Assistant and offers a single on/off button. It refreshes the state every three seconds while the app is open.
 
+![Watch mockups showing off, on, updating, and offline](docs/watch-mockups.png)
+
 The Mac bridge connects to the watch over Bluetooth LE and to Home Assistant over HTTP(S). Configure your own Home Assistant URL and entity ID. Keep your access token on the Mac.
 
 ## Requirements
