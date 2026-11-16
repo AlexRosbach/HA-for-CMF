@@ -87,7 +87,7 @@ fn render(mut api: &Api, screen: &Screen, waiting: Option<usize>, offline: bool)
     let status = if offline { "PHONE OFFLINE" }
         else if screen.count == 0 { "CONNECTING..." }
         else { "CONNECTED" };
-    text::centre(&mut api, 233, 83, status, if offline { ORANGE } else { GREEN }.rgb565());
+    text::centre(&mut api, 233, 83, status, (if offline { ORANGE } else { GREEN }).rgb565());
     draw::rrect(&mut api, 77, 107, 312, 35, 17, CARD, BG);
     text::centre(&mut api, 233, 117, "HOME ASSISTANT", INK.rgb565());
     if screen.count == 0 {
