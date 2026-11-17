@@ -19,7 +19,7 @@ cp "$root/../.build/ha-for-cmf.wp2app" "$classes/assets/"
 mkdir "$classes/res"
 "$ANDROID_BUILD_TOOLS/aapt2" compile --dir "$root/src/main/res" -o "$classes/res"
 "$ANDROID_BUILD_TOOLS/aapt2" link -I "$ANDROID_JAR" --manifest "$root/src/main/AndroidManifest.xml" \
-  -R "$classes/res/drawable_ic_launcher.xml.flat" -A "$classes/assets" --version-code 7 --version-name 0.6.0 -o "$classes/unaligned.apk"
+  -R "$classes/res/drawable_ic_launcher.xml.flat" -A "$classes/assets" --version-code 8 --version-name 0.7.0 -o "$classes/unaligned.apk"
 (cd "$classes" && zip -q unaligned.apk classes*.dex)
 "$ANDROID_BUILD_TOOLS/zipalign" -f 4 "$classes/unaligned.apk" "$classes/aligned.apk"
 "$ANDROID_BUILD_TOOLS/apksigner" sign --ks "$APK_KEYSTORE" --ks-key-alias "$APK_KEY_ALIAS" \
