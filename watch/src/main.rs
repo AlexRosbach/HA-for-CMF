@@ -154,7 +154,7 @@ fn render(mut api: &Api, screen: &Screen, results: &Screen,
         text::centre(&mut api,389,419,"ASSIST",ORANGE.rgb565());
     } else {
         let searching = mode == Mode::Search;
-        text::centre(&mut api,233,77,if searching { "ENTITAETEN SUCHE" } else { "ASSISTENT" },INK.rgb565());
+        text::centre(&mut api,233,77,if searching { "<  ENTITAETEN SUCHE" } else { "<  ASSISTENT" },INK.rgb565());
         draw::rrect(&mut api,37,111,392,48,17,CARD,BG);
         let query_text = display_word(query,query_len);
         text::centre(&mut api,233,125,if query_len == 0 { "TEXT EINGEBEN" } else { query_text },INK.rgb565());
@@ -285,7 +285,11 @@ fn main(api: &'static Api) -> i32 {
                             }
                         }
                     } else {
-                        if (207..265).contains(&y) {
+                        if y < 115 && x < 110 {
+                            mode=Mode::Home;
+                            api.send(b"ha2H");
+                            redraw=true;
+                        } else if (207..265).contains(&y) {
                             if x < 230 {
                                 if query_len<INPUT_MAX {
                                     query[query_len]=LETTERS[letter];
