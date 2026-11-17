@@ -300,6 +300,40 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1002);
         }
         handleWatchIntent(getIntent());
+        if(SettingsStore.load(this,"welcome_seen").isBlank())showWelcome();
+    }
+
+    private void showWelcome(){
+        Dialog welcome=new Dialog(this);
+        welcome.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout panel=UiKit.column(this);
+        panel.setPadding(dp(28),dp(70),dp(28),dp(32));
+        panel.setBackgroundColor(Color.WHITE);
+        var spacer=new View(this);
+        panel.addView(spacer,new LinearLayout.LayoutParams(-1,0,1));
+        TextView icon=UiKit.label(this,"⌂",74,true,UiKit.ORANGE);
+        icon.setGravity(android.view.Gravity.CENTER);
+        panel.addView(icon);
+        TextView title=UiKit.label(this,"HA for CMF",32,true,UiKit.INK);
+        title.setGravity(android.view.Gravity.CENTER);
+        panel.addView(title);
+        TextView sub=UiKit.label(this,
+                "Home Assistant auf deiner CMF Watch Pro 2",17,false,UiKit.MUTED);
+        sub.setGravity(android.view.Gravity.CENTER);
+        panel.addView(sub);
+        var middle=new View(this);
+        panel.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
+        UiKit.button(this,panel,"Los geht's  →",true,()->{
+            SettingsStore.save(this,"welcome_seen","1");
+            welcome.dismiss();
+            showTab(3);
+        });
+        welcome.setContentView(panel);
+        welcome.show();
+        if(welcome.getWindow()!=null){
+            welcome.getWindow().setLayout(-1,-1);
+            welcome.getWindow().setBackgroundDrawableResource(android.R.color.white);
+        }
     }
 
     private void showTab(int index){
