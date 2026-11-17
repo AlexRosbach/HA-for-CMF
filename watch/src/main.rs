@@ -163,17 +163,19 @@ fn render(mut api: &Api, home: &Screen, results: &Screen, mode: Mode,
         big_centre(api,233,109,
                 if title.is_empty() { if is_search { "SUCHE" } else { "FAVORITEN" } }
                     else { title },3,12,INK);
-        let empty=screen.tiles[..screen.count].iter()
-                .all(|t|t.title_len==0);
-        if empty {
+        let empty=screen.tiles[..screen.count].iter().all(|t|t.title_len==0);
+        if screen.count==0 || (is_search && empty) {
             big_centre(api,233,215,if !snapshot { "LADE DATEN" }
                     else if is_search { "KEINE TREFFER" } else { "LEERE SEITE" },3,13,INK);
             big_centre(api,233,264,
                     if is_search { "ANDEREN TYP WAEHLEN" } else { "AM HANDY BELEGEN" },
                     2,20,MUTED);
-        }else{
+        } else {
             for(i,tile) in screen.tiles[..screen.count].iter().enumerate(){
-                if tile.title_len==0 {continue;}
+                if tile.title_len==0 {
+                    tile_button(api,i,"BELEGEN","+",false,true);
+                    continue;
+                }
                 let active=!offline && tile.flags&2!=0;
                 let title=if confirming==Some(i) && tile.flags&4!=0 {
                     if active { "SCHLIESSEN?" } else { "OEFFNEN?" }
@@ -266,7 +268,6 @@ fn main(api: &'static Api) -> i32 {
     let mut last_data=api.now();
     let mut next_poll=api.now();
     let mut last_turn=api.now().wrapping_sub(350);
-    let mut last_render=api.now();
     let mut down:Option<(i32,i32)>=None;
     let mut offline=false;
     let mut paused=false;
@@ -306,9 +307,13 @@ fn main(api: &'static Api) -> i32 {
                                 (mode==Mode::Home||mode==Mode::Results) {
                             send_page(api,dx<0);
                         }else if dx.abs()<35 && dy.abs()<35 {
+                            let old_mode=mode;
                             redraw=handle_tap(api,end_x,end_y,&mut mode,
                                     &home,&results,&mut selected,
                                     &mut waiting,&mut confirming,&mut confirmed_at,now);
+                            if old_mode==Mode::Categories && mode==Mode::Results {
+                                results=Screen::default();
+                            }
                         }
                     }
                 },
@@ -342,15 +347,12 @@ fn main(api: &'static Api) -> i32 {
             offline=true;waiting=None;confirming=None;redraw=true;
         }
         if now.wrapping_sub(next_poll)>=5000 || now==next_poll {
-            if mode==Mode::Home {
-                let _=api.send(b"ha2R");
-            }
+            let _=api.send(b"ha2R");
             next_poll=now;
         }
         if redraw {
             // Avoid erasing and presenting an identical frame for periodic snapshots.
             render(api,&home,&results,mode,selected,waiting,confirming,offline);
-            last_render=now;
         }
     }
 }
