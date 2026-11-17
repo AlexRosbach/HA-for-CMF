@@ -13,7 +13,7 @@
 
 1. Download `ha-for-cmf-android.apk` and `ha-for-cmf.wp2app` from [Releases](https://github.com/AlexRosbach/HA-for-CMF/releases).
 2. Install the Android APK from Files. Grant permission for installation from your chosen app only when needed. If Android reports *App not installed*, see [Signature conflict](TROUBLESHOOTING.md#app-not-installed).
-3. In **Settings**, choose **English / Deutsch** and **System / Light / Dark**. Enter your HA URL, e.g. `https://example.invalid` (replace with your own instance), and your token. Press **Test connection & load rooms**.
+3. In **Settings**, choose **English / Deutsch** and **System / Light / Dark**. Enter your HA URL, e.g. `https://homeassistant.example.com` (replace with your own instance), and your token. Press **Test connection & load rooms**.
 4. In **Watch**, tap **Find watch**. Wake the watch. If Nothing X occupies the connection, disconnect or close it temporarily. Verify the selected device carefully.
 5. Tap **Install / update watch app** to install the included matching watch package using the compatible loader; wait for the installer to finish. The APK cannot flash firmware.
 6. In **Watch → Customize watch screen**, create your own pages, tap tiles to assign entities and save. Short labels work best.
@@ -36,7 +36,7 @@ CI prereleases currently use different **test signing keys** across runs. They c
 
 ## Connectivity tips
 
-- Use HTTPS for access over untrusted networks.
+- **HTTPS is required on all connections starting in v0.7.** Set up a TLS-enabled Home Assistant reverse proxy, trusted HTTPS hostname or VPN access to a TLS endpoint. Plain HTTP (including local IPs) is blocked to protect the token.
 - Phone and HA server must be reachable from one another (VPN/local LAN as appropriate).
 - Do not paste access tokens into issues or screenshots.
 - Bluetooth connection and loader compatibility are experimental: success on one watch does not guarantee universal compatibility.
