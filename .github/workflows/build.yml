@@ -57,19 +57,19 @@ jobs:
             android/.build/ha-for-cmf-android.apk
             .build/ha-for-cmf.wp2app
           if-no-files-found: error
-      - name: Publish GitHub Release v0.5.1
+      - name: Publish GitHub Release v0.6.0
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.5.1 >/dev/null 2>&1; then
-            echo "Release v0.5.1 already exists"
+          if gh release view v0.6.0 >/dev/null 2>&1; then
+            echo "Release v0.6.0 already exists"
             exit 0
           fi
-          gh release create v0.5.1 \
+          gh release create v0.6.0 \
             android/.build/ha-for-cmf-android.apk \
             .build/ha-for-cmf.wp2app \
             --target "$GITHUB_SHA" \
-            --title "HA for CMF v0.5.1 – Touch & Watch Layout Fixes" \
+            --title "HA for CMF v0.6.0 – Custom Watch Pages" \
             --prerelease \
-            --notes "Bugfix v0.5.1: entity cards and checkboxes are selectable again, Android edge-to-edge status bar overlap fixed, larger watch typography and controls moved inside circular safe margins. Empty watch favorites show an explicit state instead of a false connected label. Requires a matching watch app update; hardware verification pending. Test APK signed with temporary CI key."
+            --notes "Custom watch pages with up to six named pages and four editable tiles each, interactive watch preview and slot/alias editor on Android. Swipe, crown or arrow navigation on the watch. Simplified non-keyboard search by device type; Voice Assistant removed from Android and watch. Reduced flicker by suppressing identical full-screen redraws. Requires matching Android and WP2 watch app. Prerelease: actual hardware behavior still needs device testing. APK signed with temporary CI key."
