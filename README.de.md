@@ -33,7 +33,7 @@ Weitere Einzelheiten: [Installation](docs/INSTALLATION.md), [Fehlerbehebung](doc
 
 ## Screenshots – Original-App, anonymisiert
 
-![Bereinigte echte Android-Screenshots mit Raumsteuerung, Entitäten-Browser, Uhr-Vorschau und Bluetooth-Bridge](docs/screenshots/readme-ui-redacted.jpg)
+![Bereinigte echte Android-Screenshots mit Raumsteuerung, Entitäten-Browser, Uhr-Vorschau und Bluetooth-Bridge](docs/screenshots/readme-ui-redacted.webp)
 
 <sub>Echte Android-Aufnahmen der v0.6, für die öffentliche README bearbeitet: Home-Assistant-Entitäts-IDs, Bluetooth-MAC-Adresse, Gerätebezeichnungen und Benachrichtigungen wurden durch **Beispieldaten** ersetzt. Die Bilder sind **kein** Nachweis für auf der Hardware geprüfte v0.7-Hell-/Dunkeldarstellung. Siehe [Screenshot-Richtlinie](docs/SCREENSHOTS.md).</sub>
 
