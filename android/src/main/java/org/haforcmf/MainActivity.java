@@ -302,13 +302,13 @@ public final class MainActivity extends Activity {
         UiKit.title(this,settingsPage,"Home Assistant verbinden",
                 "Verbindung zu deiner Home-Assistant-Instanz.");
         var homeCard=card(settingsPage);
-        url=input(homeCard,"Home Assistant URL","http://homeassistant.local:8123",
+        url=input(homeCard,"Home Assistant URL","https://homeassistant.example.com",
                 InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
         token=input(homeCard,"Zugriffstoken","",
                 InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         token.setSaveEnabled(false);
         url.setText(SettingsStore.load(this,"ha_url").isBlank()?
-                "http://homeassistant.local:8123":SettingsStore.load(this,"ha_url"));
+                "https://homeassistant.example.com":SettingsStore.load(this,"ha_url"));
         token.setText(SettingsStore.load(this,"ha_token"));
         button(homeCard,"Verbindung testen und Räume laden",()->{
             showTab(0);
