@@ -39,6 +39,7 @@ public final class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(104, 110, 120);
     private static final int SURFACE = Color.rgb(247, 248, 250);
     private LinearLayout content;
+    private LinearLayout quickActions;
     private TextView scanState;
 
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
@@ -118,6 +119,13 @@ public final class MainActivity extends Activity {
         button(homeCard, "Geräte auswählen (max. 4)", this::chooseEntities);
         selected = text(homeCard, "Noch keine Geräte ausgewählt");
         selected.setTextColor(MUTED);
+        heading(content, "Schnellsteuerung", "Ausgewählte Geräte direkt auf dem Handy steuern.");
+        var quickCard = card(content);
+        button(quickCard, "Status aktualisieren", this::refreshQuickActions);
+        quickActions = new LinearLayout(this);
+        quickActions.setOrientation(LinearLayout.VERTICAL);
+        quickCard.addView(quickActions);
+        text(quickActions, "Bitte zuerst Home-Assistant-Geräte auswählen.");
 
         heading(content, "Uhr-App & Verbindung", "Für die Installation wird WP2 Apps mit Loader auf der Uhr benötigt.");
         var actions = card(content);
@@ -237,6 +245,76 @@ public final class MainActivity extends Activity {
                     ids.addAll(checked);
                     selected.setText(ids.isEmpty() ? "No entities selected" : String.join("\n", ids));
                 }).show();
+    }
+
+    private void refreshQuickActions() {
+        if (quickActions == null) return;
+        quickActions.removeAllViews();
+        if (ids.isEmpty()) {
+            text(quickActions, "Keine Geräte ausgewählt.");
+            return;
+        }
+        final Home home;
+        try {
+            home = new Home(url.getText().toString(), token.getText().toString());
+        } catch (IllegalArgumentException ex) {
+            text(quickActions, "Bitte zuerst URL und Token eingeben.");
+            return;
+        }
+        text(quickActions, "Aktualisiere Status …");
+        new Thread(() -> {
+            try {
+                var states = home.states();
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    quickActions.removeAllViews();
+                    for (String id : ids) {
+                        Home.Entity entity = states.get(id);
+                        if (entity == null) {
+                            text(quickActions, id + " · Nicht verfügbar");
+                            continue;
+                        }
+                        var row = card(quickActions);
+                        var title = text(row, entity.label());
+                        title.setTextColor(TEXT);
+                        title.setTypeface(null, Typeface.BOLD);
+                        var value = text(row, entity.display() + "  ·  " + id);
+                        value.setTextColor(MUTED);
+                        value.setTextSize(13);
+                        if (entity.canSwitch()) {
+                            boolean on = entity.actionable() || !"on".equals(entity.state());
+                            button(row, entity.actionable() ? "Ausführen" : (on ? "Einschalten" : "Ausschalten"),
+                                    () -> runQuickAction(entity, on));
+                        }
+                    }
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    quickActions.removeAllViews();
+                    text(quickActions, "Home Assistant nicht erreichbar: " + ex.getMessage());
+                });
+            }
+        }, "Load quick actions").start();
+    }
+
+    private void runQuickAction(Home.Entity entity, boolean on) {
+        try {
+            var home = new Home(url.getText().toString(), token.getText().toString());
+            new Thread(() -> {
+                try {
+                    home.set(entity, on);
+                    runOnUiThread(() -> {
+                        toast("Aktion gesendet: " + entity.label());
+                        refreshQuickActions();
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> toast("Aktion fehlgeschlagen: " + ex.getMessage()));
+                }
+            }, "Home Assistant quick action").start();
+        } catch (IllegalArgumentException ex) {
+            toast(ex.getMessage());
+        }
     }
 
     private boolean bluetoothAllowed() {
