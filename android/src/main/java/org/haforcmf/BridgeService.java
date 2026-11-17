@@ -8,6 +8,8 @@ import android.os.IBinder;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @SuppressLint("MissingPermission")
@@ -44,14 +46,52 @@ public final class BridgeService extends Service {
             String fallback = id.substring(id.indexOf('.') + 1).replace('_', ' ');
             String title = Home.ascii(entry == null ? fallback : entry.label(), 10);
             if (title.isEmpty()) title = Home.ascii(fallback, 10);
-            String value = entry == null ? "Offline" : entry.display();
-            out.write(entry != null && entry.canSwitch()
-                    ? ("on".equals(entry.state()) ? 3 : 1) : 0);
+            String value = Home.ascii(entry == null ? "Offline" : entry.display(), 10);
+            int flags = 0;
+            if (entry != null && entry.isLock()) {
+                if ("locked".equals(entry.state())) flags = 5; // Action + confirmation required
+                if ("unlocked".equals(entry.state())) flags = 7; // Active + confirmation required
+            } else if (entry != null && entry.canSwitch()) {
+                flags = ("on".equals(entry.state()) ? 3 : 1);
+            }
+            out.write(flags);
             out.write(title.length());
             out.write(value.length());
             writeAscii(out, title);
             writeAscii(out, value);
         }
+        return out.toByteArray();
+    }
+
+    record Page(String room, List<String> ids) {}
+    static List<Page> pagesFor(List<String> ids, String[] roomNames) {
+        var groups = new LinkedHashMap<String, List<String>>();
+        for (int i = 0; i < ids.size(); i++) {
+            String name = roomNames != null && i < roomNames.length ? roomNames[i] : "Favoriten";
+            if (name == null || name.isBlank()) name = "Favoriten";
+            groups.computeIfAbsent(name, key -> new ArrayList<>()).add(ids.get(i));
+        }
+        var pages = new ArrayList<Page>();
+        for (var group : groups.entrySet()) {
+            var members = group.getValue();
+            for (int start = 0; start < members.size(); start += 4) {
+                int end = Math.min(start + 4, members.size());
+                pages.add(new Page(group.getKey(), List.copyOf(members.subList(start, end))));
+            }
+        }
+        return pages;
+    }
+
+    static byte[] snapshotPage(char kind, Page page, int index, int total,
+            Map<String, Home.Entity> states) {
+        var out = new ByteArrayOutputStream();
+        byte[] tiles = snapshot(kind, page.ids(), states);
+        out.write(tiles, 0, tiles.length);
+        String label = Home.ascii(page.room(), 18);
+        out.write(index);
+        out.write(total);
+        out.write(label.length());
+        writeAscii(out, label);
         return out.toByteArray();
     }
 
@@ -75,7 +115,9 @@ public final class BridgeService extends Service {
             }
             var home = new Home(intent.getStringExtra("url"), intent.getStringExtra("token"));
             var ids = List.of(intent.getStringArrayExtra("entities"));
-            if (ids.isEmpty() || ids.size() > 4) throw new IllegalArgumentException("Choose one to four entities");
+            if (ids.isEmpty() || ids.size() > 24) throw new IllegalArgumentException("Choose one to 24 entities");
+            var pages = pagesFor(ids, intent.getStringArrayExtra("rooms"));
+            int pageIndex = 0;
             int slot = link.findApp();
             status = "Ready. Dismiss Paired on the watch, then open ha-for-cmf.";
             while (!Thread.currentThread().isInterrupted()) {
@@ -84,20 +126,35 @@ public final class BridgeService extends Service {
                     if (event.length < 6 || Byte.toUnsignedInt(event[1]) != slot) continue;
                     String command = new String(event, 2, 4, StandardCharsets.US_ASCII);
                     boolean action = event.length == 7 && ("ha2U".equals(command) || "ha2D".equals(command));
-                    if (!action && !(event.length == 6 && "ha2R".equals(command))) continue;
+                    boolean request = event.length == 6 && ("ha2R".equals(command)
+                            || "ha2N".equals(command) || "ha2P".equals(command));
+                    if (!action && !request) continue;
+                    if ("ha2N".equals(command)) pageIndex = (pageIndex + 1) % pages.size();
+                    if ("ha2P".equals(command)) pageIndex = (pageIndex + pages.size() - 1) % pages.size();
+                    Page page = pages.get(pageIndex);
                     Map<String, Home.Entity> states;
                     try {
                         states = home.states();
                         if (action) {
                             int index = Byte.toUnsignedInt(event[6]);
-                            Home.Entity entity = index < ids.size() ? states.get(ids.get(index)) : null;
-                            if (entity != null && entity.canSwitch()) home.set(entity, "ha2U".equals(command));
+                            Home.Entity entity = index < page.ids().size()
+                                    ? states.get(page.ids().get(index)) : null;
+                            if (entity != null) {
+                                if (entity.isLock()) {
+                                    if (entity.controllable()) {
+                                        home.setLock(entity.id(), "ha2U".equals(command));
+                                    }
+                                } else if (entity.canSwitch()) {
+                                    home.set(entity, "ha2U".equals(command));
+                                }
+                            }
                             states = home.states();
                         }
                     } catch (Exception ex) {
                         states = Map.of();
                     }
-                    link.send(slot, snapshot(action ? 'A' : 'S', ids, states));
+                    link.send(slot, snapshotPage(action ? 'A' : 'S',
+                            page, pageIndex, pages.size(), states));
                 }
                 Thread.sleep(400);
             }
