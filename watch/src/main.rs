@@ -173,12 +173,12 @@ fn render(mut api: &Api, screen: &Screen, results: &Screen,
                     if confirmation == Some(index) { ORANGE } else { ink });
         }
         // Bottom navigation at y=380, not in the clipped bottom corners.
-        draw::rrect(&mut api, 88, 379, 94, 39, 15, CARD, BG);
-        draw::rrect(&mut api, 285, 379, 94, 39, 15, CARD, BG);
-        large_centre(api, 135, 390, "SUCHE", 2, 5, ORANGE);
-        large_centre(api, 211, 389, "<", 3, 1, INK);
-        large_centre(api, 256, 389, ">", 3, 1, INK);
-        large_centre(api, 332, 390, "ASSIST", 2, 6, ORANGE);
+        draw::rrect(&mut api, 98, 379, 91, 39, 15, CARD, BG);
+        draw::rrect(&mut api, 279, 379, 91, 39, 15, CARD, BG);
+        large_centre(api, 143, 390, "SUCHE", 2, 5, ORANGE);
+        large_centre(api, 216, 389, "<", 3, 1, INK);
+        large_centre(api, 255, 389, ">", 3, 1, INK);
+        large_centre(api, 325, 390, "ASSIST", 2, 6, ORANGE);
     } else {
         let searching = mode == Mode::Search;
         large_centre(api, 233, 103,
@@ -223,11 +223,11 @@ fn render(mut api: &Api, screen: &Screen, results: &Screen,
                 }
             }
         }
-        draw::rrect(&mut api, 87, 386, 129, 32, 13, CARD, BG);
-        draw::rrect(&mut api, 251, 386, 129, 32, 13, ORANGE, BG);
-        large_centre(api, 151, 395,
+        draw::rrect(&mut api, 96, 386, 122, 32, 13, CARD, BG);
+        draw::rrect(&mut api, 248, 386, 122, 32, 13, ORANGE, BG);
+        large_centre(api, 157, 395,
                 if searching { "ZURUECK" } else { "HANDY" }, 2, 8, INK);
-        large_centre(api, 315, 395,
+        large_centre(api, 309, 395,
                 if searching { "SUCHE" } else { "FRAGEN" }, 2, 7, BG);
     }
     api.show();
