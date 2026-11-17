@@ -256,10 +256,7 @@ public final class MainActivity extends Activity {
             tabLabels[i]=t;
         }
         showTab(0);
-        if(getIntent().getBooleanExtra("watch_voice",false)){
-            showTab(3);
-            voiceResult.setText("Uhr-Anfrage: Zum Sprechen am Handy tippen.");
-        }
+        handleWatchIntent(getIntent());
     }
 
     private void showTab(int index){
@@ -292,6 +289,36 @@ public final class MainActivity extends Activity {
                 }).setPositiveButton("Schließen",null).show();
     }
 
+    private void handleWatchIntent(Intent intent) {
+        if(intent==null)return;
+        if(intent.getBooleanExtra("watch_voice",false)) {
+            showTab(3);
+            voiceResult.setText("Uhr-Anfrage: Bitte am Handy auf \"Sprechen\" tippen.");
+            intent.removeExtra("watch_voice");
+        }
+        String lockId=intent.getStringExtra("watch_lock_id");
+        if(lockId!=null && !lockId.isBlank()) {
+            String name=intent.getStringExtra("watch_lock_title");
+            boolean unlock=intent.getBooleanExtra("watch_lock_unlock",false);
+            intent.removeExtra("watch_lock_id");
+            showTab(0);
+            new AlertDialog.Builder(this)
+                    .setTitle("Schlossaktion von Uhr bestätigen?")
+                    .setMessage((name==null?lockId:name)+"\n"+lockId+"\n\n"
+                            +(unlock?"Schloss entriegeln?":"Schloss verriegeln?")
+                            +"\nDie Aktion wird erst nach dieser Bestätigung gesendet.")
+                    .setNegativeButton("Abbrechen",null)
+                    .setPositiveButton(unlock?"Ja, entriegeln":"Ja, verriegeln",
+                            (dialog,which)->{
+                                startForegroundService(new Intent(this,BridgeService.class)
+                                        .setAction(BridgeService.ACTION_CONFIRM_LOCK)
+                                        .putExtra("lock_id",lockId)
+                                        .putExtra("unlock",unlock));
+                                toast("Bestätigung an die Bridge gesendet.");
+                            }).show();
+        }
+    }
+
     private void startSpeech(){
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -319,10 +346,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){
         super.onNewIntent(intent);
         setIntent(intent);
-        if(intent.getBooleanExtra("watch_voice",false) && voiceResult!=null){
-            showTab(3);
-            voiceResult.setText("Uhr-Anfrage: Zum Sprechen am Handy tippen.");
-        }
+        handleWatchIntent(intent);
     }
 
     private void askAssistant(String phrase){
