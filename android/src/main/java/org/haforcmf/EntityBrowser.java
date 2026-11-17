@@ -125,7 +125,7 @@ final class EntityBrowser {
         Runnable update = () -> {
             String q = search.getText().toString();
             int category = type.getSelectedItemPosition();
-            String selectedRoom = rooms.get(room.getSelectedItemPosition());
+            String selectedRoom = rooms.get(Math.max(0, room.getSelectedItemPosition()));
             ArrayList<Home.Entity> match = new ArrayList<>();
             for (Home.Entity e : catalog.entities()) {
                 if (!selectedRoom.equals("Alle Räume") && !selectedRoom.equals(e.areaName())) continue;
