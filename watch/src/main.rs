@@ -183,6 +183,7 @@ fn render(mut api: &Api, screen: &Screen, results: &Screen,
         let searching = mode == Mode::Search;
         large_centre(api, 233, 103,
                 if searching { "SUCHE" } else { "ASSISTENT" }, 3, 10, INK);
+        large_centre(api, 114, 104, "<", 2, 1, ORANGE);
         draw::rrect(&mut api, 62, 144, 342, 46, 16, CARD, BG);
         let query_text = display_word(query, query_len);
         large_centre(api, 233, 155, if query_len == 0 { "TEXT EINGEBEN" }
@@ -277,7 +278,7 @@ fn main(api: &'static Api) -> i32 {
                     let x=event.x as i32;
                     let y=event.y as i32;
                     if mode==Mode::Home {
-                        if y >= 394 {
+                        if y >= 375 {
                             if x < 130 {
                                 mode=Mode::Search;
                                 query_len=0;
@@ -318,11 +319,11 @@ fn main(api: &'static Api) -> i32 {
                             }
                         }
                     } else {
-                        if y < 115 && x < 110 {
+                        if y < 139 && x < 146 {
                             mode=Mode::Home;
                             api.send(b"ha2H");
                             redraw=true;
-                        } else if (207..265).contains(&y) {
+                        } else if (230..280).contains(&y) {
                             if x < 230 {
                                 if query_len<INPUT_MAX {
                                     query[query_len]=LETTERS[letter];
@@ -336,7 +337,7 @@ fn main(api: &'static Api) -> i32 {
                                 if mode==Mode::Search { send_word(api,b'Q',&query,query_len); }
                             }
                             redraw=true;
-                        } else if y>=396 {
+                        } else if y>=383 {
                             if mode==Mode::Search {
                                 if x<230 {
                                     mode=Mode::Home;
@@ -354,8 +355,8 @@ fn main(api: &'static Api) -> i32 {
                                 }
                             }
                             redraw=true;
-                        } else if mode==Mode::Search && (274..390).contains(&y) {
-                            let index=((y-274)/37) as usize;
+                        } else if mode==Mode::Search && (287..380).contains(&y) {
+                            let index=((y-287)/31) as usize;
                             if index<results.count {
                                 let tile=results.tiles[index];
                                 if tile.flags & 1 != 0 {
