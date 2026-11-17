@@ -57,19 +57,19 @@ jobs:
             android/.build/ha-for-cmf-android.apk
             .build/ha-for-cmf.wp2app
           if-no-files-found: error
-      - name: Publish GitHub Release v0.4.0
+      - name: Publish GitHub Release v0.5.0
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.4.0 >/dev/null 2>&1; then
-            echo "Release v0.4.0 already exists"
+          if gh release view v0.5.0 >/dev/null 2>&1; then
+            echo "Release v0.5.0 already exists"
             exit 0
           fi
-          gh release create v0.4.0 \
+          gh release create v0.5.0 \
             android/.build/ha-for-cmf-android.apk \
             .build/ha-for-cmf.wp2app \
             --target "$GITHUB_SHA" \
-            --title "HA for CMF v0.4.0 – Rooms & Locks" \
+            --title "HA for CMF v0.5.0 – Search, Redesign & Assist" \
             --prerelease \
-            --notes "Room-aware entity browser and filters; smart-home room control; confirmation before unlocking/locking; watch room paging and double-tap lock safety. Experimental release: WP2 Apps loader required and physical hardware testing still pending. APK uses a CI-generated test signing key."
+            --notes "New high contrast phone navigation, fullscreen entity browser, brightness controls, reordered watch favorites, watch text search via crown and phone-mediated Assist requests. Watch microphone audio recording is not supported; phone voice recognition requires an Android recognizer. Watch lock requests always require phone confirmation. Experimental release: real hardware testing still pending. APK uses a temporary CI signing key."

@@ -20,13 +20,15 @@ import java.util.Set;
 
 final class Home {
     record Entity(String id, String label, String state, String unit,
-                  String areaId, String areaName, int features) {
+                  String areaId, String areaName, int features, int brightness) {
         Entity(String id, String label, String state, String unit) {
-            this(id, label, state, unit, "", "Ohne Raum", 0);
+            this(id, label, state, unit, "", "Ohne Raum", 0, 0);
         }
         String domain() { return id.substring(0, id.indexOf('.')); }
         boolean isLock() { return id.startsWith("lock."); }
         boolean supportsOpen() { return isLock() && (features & 1) != 0; }
+        boolean dimmable() { return id.startsWith("light.") && (features & 1) != 0; }
+        int brightnessPercent() { return Math.min(100,Math.max(0,Math.round(brightness * 100f / 255f))); }
         boolean controllable() {
             return canSwitch() || (isLock() && ("locked".equals(state) || "unlocked".equals(state)));
         }
@@ -95,7 +97,7 @@ final class Home {
             Room room = membership.get(entity.id());
             tagged.add(new Entity(entity.id(), entity.label(), entity.state(), entity.unit(),
                     room == null ? "" : room.id(), room == null ? "Ohne Raum" : room.name(),
-                    entity.features()));
+                    entity.features(), entity.brightness()));
         }
         return new Catalog(tagged, rooms);
     }
@@ -154,7 +156,7 @@ final class Home {
         try {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(3500);
-            connection.setReadTimeout(3500);
+            connection.setReadTimeout(path.equals("/api/conversation/process") ? 35000 : 3500);
             connection.setRequestProperty("Authorization", "Bearer " + token);
             if (body != null) {
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
@@ -183,7 +185,8 @@ final class Home {
             JSONObject attrs = state.optJSONObject("attributes");
             result.add(new Entity(id, attrs == null ? id : attrs.optString("friendly_name", id),
                     state.optString("state", "unknown"), attrs == null ? "" : attrs.optString("unit_of_measurement", ""),
-                    "", "Ohne Raum", attrs == null ? 0 : attrs.optInt("supported_features", 0)));
+                    "", "Ohne Raum", attrs == null ? 0 : attrs.optInt("supported_features", 0),
+                    attrs == null ? 0 : attrs.optInt("brightness", 0)));
         }
         result.sort(Comparator.comparing(Entity::label, String.CASE_INSENSITIVE_ORDER));
         return result;
@@ -193,6 +196,38 @@ final class Home {
         var result = new LinkedHashMap<String, Entity>();
         for (Entity entity : entities()) result.put(entity.id(), entity);
         return result;
+    }
+
+    record ConversationReply(String text, String conversationId) {}
+
+    ConversationReply converse(String phrase, String agent, String conversationId) throws Exception {
+        if (phrase == null || phrase.trim().isEmpty()) {
+            throw new IllegalArgumentException("Bitte eine Frage eingeben.");
+        }
+        // Voice and text requests must not unlock doors or disarm security systems.
+        // Home Assistant's own exposed-entity permissions remain the primary security boundary.
+        String normalized = phrase.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.matches(".*(entsperr|entriegel|öffne.{0,30}(tür|tor|schloss)|"
+                + "unlock|disarm|deaktivier.{0,30}alarm|open.{0,30}door).*")) {
+            throw new SecurityException("Sicherheitsaktion: Bitte über die Schlossansicht am Handy bestätigen.");
+        }
+        var body = new JSONObject().put("text", phrase.trim()).put("language", "de");
+        if (agent != null && !agent.isBlank()) body.put("agent_id", agent.trim());
+        if (conversationId != null && !conversationId.isBlank()) body.put("conversation_id", conversationId);
+        var response = new JSONObject(request("/api/conversation/process", body));
+        var speech = response.optJSONObject("response");
+        speech = speech == null ? null : speech.optJSONObject("speech");
+        speech = speech == null ? null : speech.optJSONObject("plain");
+        String answer = speech == null ? "Keine Textantwort erhalten." :
+                speech.optString("speech", "Keine Textantwort erhalten.");
+        return new ConversationReply(answer, response.optString("conversation_id", ""));
+    }
+
+    void setBrightness(Entity entity, int percent) throws Exception {
+        if (!entity.dimmable()) throw new IllegalArgumentException("Helligkeit wird nicht unterstützt.");
+        int clamped = Math.max(1, Math.min(100, percent));
+        request("/api/services/light/turn_on",new JSONObject()
+                .put("entity_id",entity.id()).put("brightness_pct",clamped));
     }
 
     void set(Entity entity, boolean on) throws Exception {

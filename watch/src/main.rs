@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use cmf_wp2_app::{Api, BUTTON, MSG_MAX, PAUSE, RESUME, TOUCH_DOWN};
+use cmf_wp2_app::{Api, BUTTON, CROWN, MSG_MAX, PAUSE, RESUME, TOUCH_DOWN};
 use cmf_wp2_ui::{Rgb, draw, text};
 
 cmf_wp2_app::entry!(main);
@@ -47,7 +47,7 @@ struct Screen {
 impl Screen {
     fn parse(mut message: &[u8]) -> Option<Self> {
         let (&count, rest) = message.split_first()?;
-        if !(1..=MAX as u8).contains(&count) {
+        if count > MAX as u8 {
             return None;
         }
         message = rest;
@@ -99,112 +99,241 @@ fn tile_origin(index: usize, count: usize) -> (i32, i32) {
     (x, y)
 }
 
-fn render(mut api: &Api, screen: &Screen,
-        waiting: Option<usize>, confirmation: Option<usize>, offline: bool) {
-    api.rect(0, 0, 466, 466, BG.rgb565());
-    // Clear room navigation and high-contrast one-tap controls.
-    text::centre(&mut api, 233, 52, "HA FOR CMF", MUTED.rgb565());
-    let status = if offline { "PHONE OFFLINE" }
-        else if screen.count == 0 { "CONNECTING..." }
-        else { "CONNECTED" };
-    text::centre(&mut api, 233, 83, status, (if offline { ORANGE } else { GREEN }).rgb565());
-    draw::rrect(&mut api, 77, 107, 312, 35, 17, CARD, BG);
-    let room = core::str::from_utf8(&screen.room[..screen.room_len]).unwrap_or("");
-    text::centre(&mut api, 233, 117, if room.is_empty() { "FAVORITES" } else { room },
-        INK.rgb565());
-    if screen.count == 0 {
-        text::centre(&mut api, 233, 239, if offline { "Wake phone & retry" } else { "Waiting for bridge" }, INK.rgb565());
-    }
-    for (index, tile) in screen.tiles[..screen.count].iter().enumerate() {
-        let (x, y) = tile_origin(index, screen.count);
-        let lit = !offline && tile.flags & 2 != 0;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode { Home, Search, Assistant }
 
-        let fill = if confirmation == Some(index) { CARD } else if lit { ORANGE } else { CARD };
-        let foreground = if confirmation == Some(index) { INK } else if lit { BG } else { INK };
-        draw::rrect(&mut api, x, y, TILE_W, TILE_H, 21, fill, BG);
-        let title = if confirmation == Some(index) && tile.flags & 4 != 0 {
-            if tile.flags & 2 == 0 { "UNLOCK?" } else { "LOCK?" }
-        } else { tile.title() };
-        text::centre(&mut api, x + TILE_W / 2, y + 20, title, foreground.rgb565());
-        let value = if offline { "Offline" }
-            else if confirmation == Some(index) { "TAP AGAIN" }
-            else if waiting == Some(index) { "Updating..." }
-            else { tile.value() };
-        text::centre(&mut api, x + TILE_W / 2, y + 65, value,
-            if confirmation == Some(index) { ORANGE.rgb565() }
-            else if lit { BG.rgb565() }
-            else if offline { ORANGE.rgb565() }
-            else { INK.rgb565() });
-    }
-    if screen.pages > 1 {
-        text::centre(&mut api, 101, 416, "< PREV", INK.rgb565());
-        text::centre(&mut api, 365, 416, "NEXT >", INK.rgb565());
+const LETTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+const INPUT_MAX: usize = 16;
+
+fn send_word(api: &Api, command: u8, query: &[u8; INPUT_MAX], len: usize) -> i32 {
+    let mut data = [0u8; 4 + INPUT_MAX];
+    data[..3].copy_from_slice(b"ha2");
+    data[3] = command;
+    data[4..4 + len].copy_from_slice(&query[..len]);
+    api.send(&data[..4 + len])
+}
+
+fn display_word<'a>(buffer: &'a [u8; INPUT_MAX], len: usize) -> &'a str {
+    core::str::from_utf8(&buffer[..len]).unwrap_or("")
+}
+
+fn render(mut api: &Api, screen: &Screen, results: &Screen,
+        mode: Mode, query: &[u8; INPUT_MAX], query_len: usize,
+        letter: usize, answer: &[u8; 96], answer_len: usize,
+        pending: Option<usize>, confirmation: Option<usize>, offline: bool) {
+    api.rect(0, 0, 466, 466, BG.rgb565());
+    let live = if offline { "OFFLINE" } else { "VERBUNDEN" };
+    text::centre(&mut api, 233, 39, live, if offline { ORANGE.rgb565() } else { GREEN.rgb565() });
+
+    if mode == Mode::Home {
+        draw::rrect(&mut api, 75, 77, 316, 47, 18, CARD, BG);
+        let room = core::str::from_utf8(&screen.room[..screen.room_len]).unwrap_or("");
+        text::centre(&mut api, 233, 90, if room.is_empty() { "FAVORITEN" } else { room }, INK.rgb565());
+        if screen.count == 0 {
+            text::centre(&mut api, 233, 235, if offline { "HANDY VERBINDEN" } else { "DATEN LADEN" }, INK.rgb565());
+        }
+        for (index, tile) in screen.tiles[..screen.count].iter().enumerate() {
+            let (x,y) = tile_origin(index, screen.count);
+            let on = !offline && tile.flags & 2 != 0 && confirmation != Some(index);
+            let fill = if on { ORANGE } else { CARD };
+            let ink = if on { BG } else { INK };
+            draw::rrect(&mut api,x,y,TILE_W,TILE_H,20,fill,BG);
+            text::centre(&mut api,x+TILE_W/2,y+20,
+                    if confirmation == Some(index) {
+                        if tile.flags & 2 == 0 { "ENTSPERREN?" } else { "VERRIEGELN?" }
+                    } else { tile.title() },ink.rgb565());
+            let value = if confirmation == Some(index) { "NOCHMAL TIPPEN" }
+                    else if pending == Some(index) { "WIRD GESENDET" }
+                    else if offline { "OFFLINE" } else { tile.value() };
+            text::centre(&mut api,x+TILE_W/2,y+64,value,
+                    if confirmation == Some(index) { ORANGE.rgb565() } else { ink.rgb565() });
+        }
+        text::centre(&mut api,78,419,"SUCHE",ORANGE.rgb565());
+        text::centre(&mut api,182,419,"<",INK.rgb565());
+        text::centre(&mut api,282,419,">",INK.rgb565());
+        text::centre(&mut api,389,419,"ASSIST",ORANGE.rgb565());
     } else {
-        text::centre(&mut api, 233, 422, "HOME ASSISTANT", MUTED.rgb565());
+        let searching = mode == Mode::Search;
+        text::centre(&mut api,233,77,if searching { "<  ENTITAETEN SUCHE" } else { "<  ASSISTENT" },INK.rgb565());
+        draw::rrect(&mut api,37,111,392,48,17,CARD,BG);
+        let query_text = display_word(query,query_len);
+        text::centre(&mut api,233,125,if query_len == 0 { "TEXT EINGEBEN" } else { query_text },INK.rgb565());
+        text::centre(&mut api,233,170, "BUCHSTABE MIT KRONE WAEHLEN",MUTED.rgb565());
+        draw::rrect(&mut api,58,207,160,56,20,ORANGE,BG);
+        let selected = core::str::from_utf8(&LETTERS[letter..letter+1]).unwrap_or("A");
+        text::centre(&mut api,138,222,selected,BG.rgb565());
+        draw::rrect(&mut api,246,207,160,56,20,CARD,BG);
+        text::centre(&mut api,326,222,"LOESCHEN",INK.rgb565());
+        if searching {
+            let count = core::cmp::min(results.count,3);
+            for i in 0..count {
+                let tile = &results.tiles[i];
+                let y = 274 + i as i32 * 37;
+                draw::rrect(&mut api,72,y,322,34,12,CARD,BG);
+                text::centre(&mut api,233,y+7,tile.title(),INK.rgb565());
+            }
+            if count == 0 {
+                text::centre(&mut api,233,297,"KEINE TREFFER",MUTED.rgb565());
+            }
+        } else {
+            let response = core::str::from_utf8(&answer[..answer_len]).unwrap_or("");
+            if answer_len == 0 {
+                text::centre(&mut api,233,296,"TEXTFRAGE ODER HANDY",MUTED.rgb565());
+            } else {
+                let bytes = response.as_bytes();
+                for i in 0..4 {
+                    let first = i*20;
+                    if first >= bytes.len() { break; }
+                    let end = core::cmp::min(first+20,bytes.len());
+                    if let Ok(line) = core::str::from_utf8(&bytes[first..end]) {
+                        text::centre(&mut api,233,274+i as i32*28,line,INK.rgb565());
+                    }
+                }
+            }
+        }
+        draw::rrect(&mut api,38,400,173,48,18,CARD,BG);
+        text::centre(&mut api,124,414,if searching { "ZURUECK" } else { "AM HANDY" },INK.rgb565());
+        draw::rrect(&mut api,246,400,181,48,18,ORANGE,BG);
+        text::centre(&mut api,336,414,if searching { "SUCHEN" } else { "FRAGEN" },BG.rgb565());
     }
     api.show();
 }
 
 fn main(api: &'static Api) -> i32 {
-    let mut screen = Screen::default();
-    let mut pending = None;
-    let mut confirmation: Option<usize> = None;
-    let mut confirmed_at = api.now();
-    let mut received = api.now();
-    let mut next_poll = api.now();
-    let mut offline = false;
-    let mut paused = false;
-    let mut message = [0; MSG_MAX];
-    render(api, &screen, pending, confirmation, offline);
+    let mut screen=Screen::default();
+    let mut results=Screen::default();
+    let mut mode=Mode::Home;
+    let mut query=[0u8; INPUT_MAX];
+    let mut query_len=0usize;
+    let mut letter=0usize;
+    let mut answer=[0u8;96];
+    let mut answer_len=0usize;
+    let mut pending=None;
+    let mut confirmation:Option<usize>=None;
+    let mut confirmed_at=api.now();
+    let mut received=api.now();
+    let mut next_poll=api.now();
+    let mut offline=false;
+    let mut paused=false;
+    let mut message=[0u8; MSG_MAX];
+    render(api,&screen,&results,mode,&query,query_len,letter,&answer,answer_len,
+            pending,confirmation,offline);
     loop {
-        let event = api.event(if paused { u32::MAX } else { 250 });
-        let now = api.now();
-        let old = (screen, pending, confirmation, offline);
-        let mut redraw = false;
-        if let Some(event) = event {
+        let event=api.event(if paused { u32::MAX } else { 250 });
+        let now=api.now();
+        let mut redraw=false;
+        if let Some(event)=event {
             match event.kind {
                 BUTTON => return 0,
-                PAUSE => paused = true,
+                PAUSE => paused=true,
                 RESUME => {
-                    paused = false;
-                    pending = None;
-                    confirmation = None;
-                    offline = false;
-                    screen = Screen::default();
-                    received = now;
-                    next_poll = now;
-                    redraw = true;
+                    paused=false;
+                    pending=None;
+                    confirmation=None;
+                    offline=false;
+                    received=now;
+                    next_poll=now;
+                    redraw=true;
                 }
-                TOUCH_DOWN if !paused && !offline && pending.is_none() => {
-                    let x = event.x as i32;
-                    let y = event.y as i32;
-                    if y >= 399 && screen.pages > 1 && (x < 195 || x > 271) {
-                        confirmation = None;
-                        let command: &[u8] = if x < 195 { b"ha2P" } else { b"ha2N" };
-                        if api.send(command) != 0 { offline = true; }
-                        received = now;
-                    } else {
-                        for (i, tile) in screen.tiles[..screen.count].iter().enumerate() {
-                            let (tx, ty) = tile_origin(i, screen.count);
-                            if tile.flags & 1 == 0 || !(tx..tx + TILE_W).contains(&x)
-                                    || !(ty..ty + TILE_H).contains(&y) {
-                                continue;
+                CROWN if !paused && mode != Mode::Home => {
+                    letter = if event.delta > 0 { (letter+1)%LETTERS.len() }
+                        else { (letter+LETTERS.len()-1)%LETTERS.len() };
+                    redraw=true;
+                }
+                TOUCH_DOWN if !paused && pending.is_none() => {
+                    let x=event.x as i32;
+                    let y=event.y as i32;
+                    if mode==Mode::Home {
+                        if y >= 394 {
+                            if x < 130 {
+                                mode=Mode::Search;
+                                query_len=0;
+                                answer_len=0;
+                                results=Screen::default();
+                                send_word(api,b'Q',&query,0);
+                            } else if x < 230 {
+                                api.send(b"ha2P");
+                            } else if x < 322 {
+                                api.send(b"ha2N");
+                            } else {
+                                mode=Mode::Assistant;
+                                query_len=0;
+                                answer_len=0;
                             }
-                            // Locks always require two distinct taps in a five-second window.
-                            if tile.flags & 4 != 0 && (confirmation != Some(i)
-                                    || now.wrapping_sub(confirmed_at) > 5000) {
-                                confirmation = Some(i);
-                                confirmed_at = now;
-                                redraw = true;
+                            redraw=true;
+                        } else if !offline {
+                            for (i,tile) in screen.tiles[..screen.count].iter().enumerate() {
+                                let (tx,ty)=tile_origin(i,screen.count);
+                                if tile.flags & 1 == 0 ||
+                                    !(tx..tx+TILE_W).contains(&x) ||
+                                    !(ty..ty+TILE_H).contains(&y) { continue; }
+                                if tile.flags & 4 != 0 &&
+                                    (confirmation!=Some(i) || now.wrapping_sub(confirmed_at)>5000) {
+                                    confirmation=Some(i);
+                                    confirmed_at=now;
+                                    redraw=true;
+                                    break;
+                                }
+                                confirmation=None;
+                                let action=if tile.flags & 2 == 0 { b'U' } else { b'D' };
+                                if api.send(&[b'h',b'a',b'2',action,i as u8])==0 {
+                                    pending=Some(i);
+                                    received=now;
+                                } else { offline=true; }
+                                redraw=true;
                                 break;
                             }
-                            confirmation = None;
-                            let action = if tile.flags & 2 == 0 { b'U' } else { b'D' };
-                            if api.send(&[b'h', b'a', b'2', action, i as u8]) == 0 {
-                                pending = Some(i);
-                                received = now;
-                            } else { offline = true; }
-                            break;
+                        }
+                    } else {
+                        if y < 115 && x < 110 {
+                            mode=Mode::Home;
+                            api.send(b"ha2H");
+                            redraw=true;
+                        } else if (207..265).contains(&y) {
+                            if x < 230 {
+                                if query_len<INPUT_MAX {
+                                    query[query_len]=LETTERS[letter];
+                                    query_len+=1;
+                                    if mode==Mode::Search {
+                                        send_word(api,b'Q',&query,query_len);
+                                    }
+                                }
+                            } else if query_len>0 {
+                                query_len-=1;
+                                if mode==Mode::Search { send_word(api,b'Q',&query,query_len); }
+                            }
+                            redraw=true;
+                        } else if y>=396 {
+                            if mode==Mode::Search {
+                                if x<230 {
+                                    mode=Mode::Home;
+                                    api.send(b"ha2H");
+                                } else {
+                                    send_word(api,b'Q',&query,query_len);
+                                }
+                            } else {
+                                if x<230 {
+                                    api.send(b"ha2V");
+                                    answer_len=0;
+                                } else if query_len>0 {
+                                    send_word(api,b'T',&query,query_len);
+                                    answer_len=0;
+                                }
+                            }
+                            redraw=true;
+                        } else if mode==Mode::Search && (274..390).contains(&y) {
+                            let index=((y-274)/37) as usize;
+                            if index<results.count {
+                                let tile=results.tiles[index];
+                                if tile.flags & 1 != 0 {
+                                    // Keep lock actions on phone; watch search only controls non-lock entities.
+                                    let action=if tile.flags & 2 == 0 { b'U' } else { b'D' };
+                                    if api.send(&[b'h',b'a',b'2',action,index as u8])==0 {
+                                        pending=Some(index);
+                                        received=now;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -212,35 +341,49 @@ fn main(api: &'static Api) -> i32 {
             }
         }
         if paused { continue; }
-        while let Some(data) = api.recv(&mut message) {
-            if let Some(values) = data.strip_prefix(b"ha2A").or_else(|| {
-                if pending.is_none() { data.strip_prefix(b"ha2S") } else { None }
-            }) {
-                if let Some(snapshot) = Screen::parse(values) {
-                    let same_page = screen.page == snapshot.page && screen.pages == snapshot.pages
-                        && screen.room == snapshot.room;
-                    screen = snapshot;
-                    pending = None;
-                    if !same_page { confirmation = None; }
-                    offline = false;
-                    received = now;
+        while let Some(data)=api.recv(&mut message) {
+            if let Some(values)=data.strip_prefix(b"ha2Y") {
+                let n=core::cmp::min(values.len(),answer.len());
+                answer[..n].copy_from_slice(&values[..n]);
+                answer_len=n;
+                received=now;
+                redraw=true;
+                continue;
+            }
+            if let Some(values)=data.strip_prefix(b"ha2A").or_else(||data.strip_prefix(b"ha2S")) {
+                if let Some(snapshot)=Screen::parse(values) {
+                    if mode==Mode::Search {
+                        results=snapshot;
+                    } else {
+                        let same_page=screen.page==snapshot.page &&
+                                screen.pages==snapshot.pages && screen.room==snapshot.room;
+                        screen=snapshot;
+                        if !same_page { confirmation=None; }
+                    }
+                    pending=None;
+                    offline=false;
+                    received=now;
+                    redraw=true;
                 }
             }
         }
-        if confirmation.is_some() && now.wrapping_sub(confirmed_at) >= 5_000 {
-            confirmation = None;
+        if confirmation.is_some()&&now.wrapping_sub(confirmed_at)>5000 {
+            confirmation=None;
+            redraw=true;
         }
-        if now.wrapping_sub(received) >= 15_000 {
-            offline = true;
-            pending = None;
-            confirmation = None;
+        if now.wrapping_sub(received)>=15000 {
+            if !offline { redraw=true; }
+            offline=true;
+            pending=None;
+            confirmation=None;
         }
-        if (now.wrapping_sub(next_poll) as i32) >= 0 {
-            if pending.is_none() { api.send(b"ha2R"); }
-            next_poll = now.wrapping_add(4000);
+        if (now.wrapping_sub(next_poll) as i32)>=0 {
+            if pending.is_none()&&mode==Mode::Home { api.send(b"ha2R"); }
+            next_poll=now.wrapping_add(4000);
         }
-        if redraw || (screen, pending, confirmation, offline) != old {
-            render(api, &screen, pending, confirmation, offline);
+        if redraw {
+            render(api,&screen,&results,mode,&query,query_len,letter,
+                    &answer,answer_len,pending,confirmation,offline);
         }
     }
 }

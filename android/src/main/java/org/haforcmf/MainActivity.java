@@ -16,6 +16,8 @@ import java.util.Set;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Intent;
+import android.speech.RecognizerIntent;
+import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
 import android.os.*;
 import android.text.*;
@@ -41,6 +43,13 @@ public final class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(104, 110, 120);
     private static final int SURFACE = Color.rgb(247, 248, 250);
     private LinearLayout content;
+    private LinearLayout[] pages;
+    private TextView[] tabLabels;
+    private ScrollView screenScroll;
+    private EditText voiceText, agentInput;
+    private TextView voiceResult;
+    private String conversationId = "";
+    private final int speechCode = 42;
     private LinearLayout quickActions;
     private Spinner roomPicker;
     private Home.Catalog catalog;
@@ -57,16 +66,7 @@ public final class MainActivity extends Activity {
         d.setCornerRadius(dp(corner));
         return d;
     }
-    private LinearLayout card(LinearLayout parent) {
-        var box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(16), dp(18), dp(16));
-        box.setBackground(shape(SURFACE, 20));
-        var p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(10), 0, dp(8));
-        parent.addView(box, p);
-        return box;
-    }
+    private LinearLayout card(LinearLayout parent){return UiKit.card(this,parent);}
     private void heading(LinearLayout parent, String title, String detail) {
         var h = text(parent, title);
         h.setTextSize(25);
@@ -82,139 +82,416 @@ public final class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.WHITE);
-        getWindow().setNavigationBarColor(Color.WHITE);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        var scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.WHITE);
-        content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(22), dp(24), dp(22), dp(36));
-        scroll.setFillViewport(true);
-        scroll.addView(content);
-        setContentView(scroll);
+        getWindow().setStatusBarColor(UiKit.BG);
+        getWindow().setNavigationBarColor(UiKit.BG);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
 
-        var appTitle = text(content, "●  HA for CMF");
-        appTitle.setTextColor(ORANGE);
-        appTitle.setTextSize(21);
-        appTitle.setTypeface(null, Typeface.BOLD);
-        appTitle.setPadding(0, 0, 0, dp(26));
+        var root = UiKit.column(this);
+        root.setBackgroundColor(UiKit.BG);
+        setContentView(root);
 
-        heading(content, "Deine CMF Watch verbinden",
-                "Home Assistant auf deiner Watch Pro 2. Verbinde zuerst die Uhr und wähle anschließend deine Geräte aus.");
-        var connection = card(content);
-        var watchTitle = text(connection, "CMF Watch Pro 2");
-        watchTitle.setTextColor(TEXT);
-        watchTitle.setTypeface(null, Typeface.BOLD);
-        watchTitle.setTextSize(19);
-        watch = text(connection, "Noch keine Uhr ausgewählt");
-        watch.setTextColor(MUTED);
-        scanState = text(connection, "Bluetooth-Suche bereit");
-        scanState.setTextColor(MUTED);
-        scanState.setTextSize(13);
-        button(connection, "⌕  Uhr suchen", this::scan);
-        var hint = text(connection, "Tipp: Uhr aufwecken. Falls Nothing X die Verbindung hält, dort vorübergehend trennen.");
-        hint.setTextColor(MUTED);
-        hint.setTextSize(12);
+        var top = UiKit.row(this);
+        top.setPadding(dp(20),dp(12),dp(20),dp(8));
+        top.setBackgroundColor(Color.WHITE);
+        var logo = UiKit.label(this,"⌂",24,true,UiKit.ORANGE);
+        top.addView(logo,new LinearLayout.LayoutParams(dp(36),dp(40)));
+        var name = UiKit.label(this,"HA for CMF",20,true,UiKit.INK);
+        top.addView(name,new LinearLayout.LayoutParams(0,dp(44),1));
+        root.addView(top);
 
-        heading(content, "Home Assistant", "URL und Zugriffstoken bleiben nur während dieser App-Sitzung im Speicher.");
-        var homeCard = card(content);
-        url = input(homeCard, "Home Assistant URL", "http://homeassistant.local:8123",
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        token = input(homeCard, "Access token", "",
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        token.setSaveEnabled(false);
-        button(homeCard, "Favoriten für die Uhr auswählen", this::chooseEntities);
-        selected = text(homeCard, "Noch keine Geräte ausgewählt");
-        selected.setTextColor(MUTED);
-        heading(content, "Räume & Geräte", "Wähle einen Raum und steuere Licht, Szenen oder Schlösser direkt.");
-        var quickCard = card(content);
-        var pickTitle = text(quickCard, "RAUM");
-        pickTitle.setTextSize(12);
-        pickTitle.setTextColor(MUTED);
-        roomPicker = new Spinner(this);
+        screenScroll = new ScrollView(this);
+        screenScroll.setFillViewport(true);
+        root.addView(screenScroll,new LinearLayout.LayoutParams(-1,0,1));
+        content = UiKit.column(this);
+        content.setPadding(dp(20),dp(10),dp(20),dp(24));
+        screenScroll.addView(content);
+        pages = new LinearLayout[4];
+        for (int i=0;i<pages.length;i++) {
+            pages[i] = UiKit.column(this);
+            content.addView(pages[i]);
+        }
+        var homePage=pages[0];
+        var entityPage=pages[1];
+        var watchPage=pages[2];
+        var settingsPage=pages[3];
+
+        UiKit.title(this,homePage,"Räume & Geräte",
+                "Dein Zuhause. Wähle einen Raum und steuere die Geräte.");
+        var quickCard=card(homePage);
+        var areaLabel=text(quickCard,"RAUM AUSWÄHLEN");
+        areaLabel.setTextSize(12);areaLabel.setTextColor(UiKit.MUTED);
+        roomPicker=new Spinner(this);
+        roomPicker.setBackground(UiKit.bg(this,Color.WHITE,12,UiKit.EDGE));
         roomOptions.add("Alle Räume");
         roomOptionIds.add("");
-        var options = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, roomOptions);
-        roomPicker.setAdapter(options);
-        quickCard.addView(roomPicker);
-        roomPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view,
-                    int position, long id) {
-                if (position < roomOptionIds.size()) {
-                    String next = roomOptionIds.get(position);
-                    if (!next.equals(chosenRoomId)) {
-                        chosenRoomId = next;
-                        renderRoom();
-                    }
+        var roomsAdapter=new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_dropdown_item,roomOptions) {
+            @Override public View getView(int position, View convertView,
+                    android.view.ViewGroup parent) {
+                var v=(TextView)super.getView(position,convertView,parent);
+                v.setTextColor(UiKit.INK);v.setPadding(dp(12),0,dp(12),0);return v;
+            }
+        };
+        roomPicker.setAdapter(roomsAdapter);
+        quickCard.addView(roomPicker,new LinearLayout.LayoutParams(-1,dp(52)));
+        roomPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view,int position,long id){
+                if(position<roomOptionIds.size()){
+                    String next=roomOptionIds.get(position);
+                    if(!next.equals(chosenRoomId)){chosenRoomId=next;renderRoom();}
                 }
             }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
-        button(quickCard, "Räume und Geräte aktualisieren", this::refreshQuickActions);
-        quickActions = new LinearLayout(this);
-        quickActions.setOrientation(LinearLayout.VERTICAL);
+        button(quickCard,"↻  Räume und Status aktualisieren",this::refreshQuickActions);
+        quickActions=UiKit.column(this);
         quickCard.addView(quickActions);
-        text(quickActions, "Verbinde Home Assistant und lade die Räume.");
+        var empty=text(quickActions,"Home Assistant unter Einstellungen verbinden und Räume laden.");
+        empty.setTextColor(UiKit.MUTED);
 
-        heading(content, "Uhr-App & Verbindung", "Für die Installation wird WP2 Apps mit Loader auf der Uhr benötigt.");
-        var actions = card(content);
-        button(actions, "Uhr-App installieren / aktualisieren", () -> {
-            if (!bluetoothAllowed()) return;
-            if (address == null) { toast("Bitte zuerst die Uhr auswählen."); return; }
-            startForegroundService(new Intent(this, BridgeService.class)
-                    .putExtra("install", true).putExtra("address", address));
+        UiKit.title(this,entityPage,"Entitäten-Browser",
+                "Alle Geräte, Sensoren, Szenen und Schlösser übersichtlich.");
+        var entityCard=card(entityPage);
+        button(entityCard,"⌕  Alle Entitäten durchsuchen",this::chooseEntities);
+        button(entityCard,"♥  Favoriten für die Uhr",this::showFavorites);
+        selected=text(entityCard,"Noch keine Favoriten ausgewählt");
+        String storedIds=SettingsStore.load(this,"favorites");
+        if(!storedIds.isBlank()){
+            for(String id:storedIds.split(",")){
+                if(ids.size()>=24)break;
+                if(id.matches("[a-z0-9_]+\\.[a-z0-9_]+"))ids.add(id);
+            }
+            selected.setText(ids.size()+" Favoriten für die Uhr");
+        }
+        selected.setTextColor(UiKit.MUTED);
+        var info=text(entityPage,"Filtere nach Raum, Gerätetyp, Status und Favoriten. "
+                +"Du kannst bis zu 24 Einträge für die Uhr festlegen.");
+        info.setTextColor(UiKit.MUTED);
+        info.setTextSize(14);
+
+        UiKit.title(this,watchPage,"Uhr verbinden","Deine CMF Watch Pro 2 einrichten.");
+        var connection=card(watchPage);
+        var watchTitle=text(connection,"CMF Watch Pro 2");
+        watchTitle.setTextSize(19);watchTitle.setTypeface(null,Typeface.BOLD);
+        watch=text(connection,"Noch keine Uhr ausgewählt");
+        String priorAddress=SettingsStore.load(this,"watch_address");
+        if(!priorAddress.isBlank()){address=priorAddress;watch.setText("Gespeicherte Uhr: "+priorAddress);}
+        watch.setTextColor(UiKit.MUTED);
+        scanState=text(connection,"Bluetooth-Suche bereit");
+        scanState.setTextSize(13);scanState.setTextColor(UiKit.MUTED);
+        button(connection,"⌕  Uhr suchen",this::scan);
+        var hint=text(connection,"Uhr aufwecken. Gegebenenfalls Nothing X vorübergehend trennen.");
+        hint.setTextColor(UiKit.MUTED);hint.setTextSize(13);
+
+        UiKit.title(this,watchPage,"Uhr-App & Bridge",
+                "Installieren, synchronisieren und Verbindung prüfen.");
+        var actions=card(watchPage);
+        button(actions,"Uhr-App installieren / aktualisieren",()->{
+            if(!bluetoothAllowed())return;
+            if(address==null){toast("Bitte zuerst die Uhr auswählen.");return;}
+            startForegroundService(new Intent(this,BridgeService.class)
+                    .putExtra("install",true).putExtra("address",address));
         });
-        button(actions, "Bridge starten", this::startBridge);
-        button(actions, "Bridge stoppen", () -> {
-            stopService(new Intent(this, BridgeService.class));
-            BridgeService.status = "Bridge stopped";
+        button(actions,"Bridge starten",this::startBridge);
+        button(actions,"Bridge stoppen",()->{
+            stopService(new Intent(this,BridgeService.class));
+            BridgeService.status="Bridge stopped";
         });
-        status = text(actions, BridgeService.status);
-        status.setTextColor(MUTED);
-        status.setTextSize(13);
-        ui.post(new Runnable() {
-            @Override public void run() {
-                status.setText(BridgeService.status);
-                ui.postDelayed(this, 1000);
+        status=text(actions,BridgeService.status);
+        status.setTextColor(UiKit.MUTED);status.setTextSize(13);
+        ui.post(new Runnable(){
+            @Override public void run(){
+                if(status!=null)status.setText(BridgeService.status);
+                ui.postDelayed(this,1000);
             }
         });
+
+        UiKit.title(this,settingsPage,"Home Assistant verbinden",
+                "Verbindung zu deiner Home-Assistant-Instanz.");
+        var homeCard=card(settingsPage);
+        url=input(homeCard,"Home Assistant URL","http://homeassistant.local:8123",
+                InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
+        token=input(homeCard,"Zugriffstoken","",
+                InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        token.setSaveEnabled(false);
+        url.setText(SettingsStore.load(this,"ha_url").isBlank()?
+                "http://homeassistant.local:8123":SettingsStore.load(this,"ha_url"));
+        token.setText(SettingsStore.load(this,"ha_token"));
+        button(homeCard,"Verbindung testen und Räume laden",()->{
+            showTab(0);
+            refreshQuickActions();
+        });
+        var note=text(homeCard,"Token in Home Assistant → Profil → Sicherheit "
+                +"→ Langlebige Zugriffstoken erstellen.");
+        note.setTextColor(UiKit.MUTED);note.setTextSize(13);
+
+        UiKit.title(this,settingsPage,"Voice Assistant",
+                "Assistent auf dem Handy auswählen. Keine Uhren-Mikrofonaufnahme.");
+        var voiceCard=card(settingsPage);
+        agentInput=UiKit.field(this,voiceCard,"Home Assistant Agent-ID (optional)",
+                "Leer = Standardassistent",SettingsStore.load(this,"agent"),InputType.TYPE_CLASS_TEXT);
+        TextView selectionTitle=UiKit.label(this,"ASSISTENT WÄHLEN",13,true,UiKit.INK);
+        voiceCard.addView(selectionTitle);
+        Spinner agentPreset=new Spinner(this);
+        String[] assistants={"Home Assistant Assist (Standard)",
+                "Home Assistant integrierter Agent",
+                "OpenAI / anderer Agent über Home Assistant"};
+        var presetAdapter=new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_dropdown_item,assistants){
+            @Override public View getView(int position,View recycled,android.view.ViewGroup parent){
+                TextView view=(TextView)super.getView(position,recycled,parent);
+                view.setTextColor(UiKit.INK);
+                return view;
+            }
+        };
+        agentPreset.setAdapter(presetAdapter);
+        voiceCard.addView(agentPreset,new LinearLayout.LayoutParams(-1,dp(54)));
+        String initialAgent=agentInput.getText().toString();
+        agentPreset.setSelection(initialAgent.isBlank()?0:
+                initialAgent.equals("conversation.home_assistant")?1:2);
+        agentPreset.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
+                if(position==0)agentInput.setText("");
+                else if(position==1)agentInput.setText("conversation.home_assistant");
+            }
+            public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        var agentHint=text(voiceCard,"Beispiel: conversation.home_assistant. "
+                +"Andere Agenten müssen in Home Assistant eingerichtet sein.");
+        agentHint.setTextColor(UiKit.MUTED);agentHint.setTextSize(13);
+        voiceText=UiKit.field(this,voiceCard,"Nachricht an den Assistenten",
+                "z. B. Wie warm ist das Wohnzimmer?","",InputType.TYPE_CLASS_TEXT);
+        button(voiceCard,"🎙  Am Handy sprechen",this::startSpeech);
+        button(voiceCard,"Nachricht senden",()->askAssistant(voiceText.getText().toString()));
+        voiceResult=text(voiceCard,"Home Assistant Assist · Bereit");
+        voiceResult.setTextColor(UiKit.INK);
+        var limitation=text(voiceCard,"Die Uhr kann eine Anfrage anstoßen und Text anzeigen. "
+                +"Direkte Uhren-Audioaufnahme wird vom aktuellen Loader nicht unterstützt.");
+        limitation.setTextSize(13);limitation.setTextColor(UiKit.MUTED);
+
+        UiKit.title(this,settingsPage,"Sicherheit",
+                "Türöffner und Schlösser werden nur nach Bestätigung auf dem Handy ausgeführt.");
+        var security=card(settingsPage);
+        var safe=text(security,"✓  Entriegeln und Tür öffnen erfordern eine ausdrückliche "
+                +"Bestätigung mit vollständigem Schlossnamen. Der Watch-Bridge-Befehl allein öffnet keine Tür.");
+        safe.setTextColor(UiKit.INK);
+        safe.setTextSize(14);
+
+        var nav=UiKit.row(this);
+        nav.setPadding(dp(4),dp(4),dp(4),dp(9));
+        nav.setBackgroundColor(Color.WHITE);
+        root.addView(nav,new LinearLayout.LayoutParams(-1,dp(68)));
+        String[] tabs={"⌂\nZuhause","⌕\nEntitäten","◉\nUhr","⚙\nEinstellungen"};
+        tabLabels=new TextView[4];
+        for(int i=0;i<4;i++){
+            final int index=i;
+            TextView t=UiKit.label(this,tabs[i],11,true,UiKit.MUTED);
+            t.setGravity(android.view.Gravity.CENTER);
+            t.setBackground(UiKit.bg(this,Color.WHITE,12,0));
+            nav.addView(t,new LinearLayout.LayoutParams(0,-1,1));
+            t.setOnClickListener(v->showTab(index));
+            tabLabels[i]=t;
+        }
+        showTab(0);
+        if(android.os.Build.VERSION.SDK_INT>=33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1002);
+        }
+        handleWatchIntent(getIntent());
+        if(SettingsStore.load(this,"welcome_seen").isBlank())showWelcome();
     }
 
-    private TextView text(LinearLayout parent, String value) {
-        var view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(16);
-        view.setTextColor(TEXT);
-        parent.addView(view);
-        return view;
+    private void showWelcome(){
+        Dialog welcome=new Dialog(this);
+        welcome.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout panel=UiKit.column(this);
+        panel.setPadding(dp(28),dp(70),dp(28),dp(32));
+        panel.setBackgroundColor(Color.WHITE);
+        var spacer=new View(this);
+        panel.addView(spacer,new LinearLayout.LayoutParams(-1,0,1));
+        TextView icon=UiKit.label(this,"⌂",74,true,UiKit.ORANGE);
+        icon.setGravity(android.view.Gravity.CENTER);
+        panel.addView(icon);
+        TextView title=UiKit.label(this,"HA for CMF",32,true,UiKit.INK);
+        title.setGravity(android.view.Gravity.CENTER);
+        panel.addView(title);
+        TextView sub=UiKit.label(this,
+                "Home Assistant auf deiner CMF Watch Pro 2",17,false,UiKit.MUTED);
+        sub.setGravity(android.view.Gravity.CENTER);
+        panel.addView(sub);
+        var middle=new View(this);
+        panel.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
+        UiKit.button(this,panel,"Los geht's  →",true,()->{
+            SettingsStore.save(this,"welcome_seen","1");
+            welcome.dismiss();
+            showTab(3);
+        });
+        welcome.setContentView(panel);
+        welcome.show();
+        if(welcome.getWindow()!=null){
+            welcome.getWindow().setLayout(-1,-1);
+            welcome.getWindow().setBackgroundDrawableResource(android.R.color.white);
+        }
     }
 
-    private EditText input(LinearLayout parent, String label, String value, int type) {
-        text(parent, label);
-        var field = new EditText(this);
-        field.setSingleLine(true);
-        field.setInputType(type);
-        field.setText(value);
-        field.setTextColor(TEXT);
-        field.setHintTextColor(MUTED);
-        parent.addView(field);
-        return field;
+    private void showTab(int index){
+        if(pages==null)return;
+        for(int i=0;i<pages.length;i++){
+            pages[i].setVisibility(i==index?View.VISIBLE:View.GONE);
+            if(tabLabels!=null && tabLabels[i]!=null){
+                tabLabels[i].setTextColor(i==index?UiKit.INK:UiKit.MUTED);
+                tabLabels[i].setBackground(UiKit.bg(this,
+                        i==index?UiKit.PEACH:Color.WHITE,12,0));
+            }
+        }
+        if(screenScroll!=null)screenScroll.scrollTo(0,0);
     }
 
-    private void button(LinearLayout parent, String label, Runnable action) {
-        var button = new Button(this);
-        button.setText(label);
-        button.setAllCaps(false);
-        button.setTextColor(Color.WHITE);
-        button.setTextSize(14);
-        button.setTypeface(null, Typeface.BOLD);
-        button.setBackgroundTintList(ColorStateList.valueOf(ORANGE));
-        button.setMinHeight(dp(52));
-        var p = new LinearLayout.LayoutParams(-1, dp(52));
-        p.setMargins(0, dp(10), 0, dp(4));
-        parent.addView(button, p);
-        button.setOnClickListener(v -> action.run());
+    private void persistSettings(){
+        if(url!=null && token!=null){
+            SettingsStore.save(this,"ha_url",url.getText().toString());
+            SettingsStore.save(this,"ha_token",token.getText().toString());
+        }
+        SettingsStore.save(this,"favorites",String.join(",",ids));
+        SettingsStore.save(this,"watch_address",address==null?"":address);
+        if(agentInput!=null)SettingsStore.save(this,"agent",agentInput.getText().toString());
+    }
+
+    private void showFavorites(){
+        if(ids.isEmpty()){
+            new AlertDialog.Builder(this).setTitle("Favoriten fehlen")
+                    .setMessage("Suche nach Geräten und füge deine Favoriten für die Uhr hinzu.")
+                    .setNegativeButton("Abbrechen",null)
+                    .setPositiveButton("Entitäten öffnen",(d,w)->chooseEntities()).show();
+            return;
+        }
+        String[] options=new String[ids.size()];
+        for(int i=0;i<ids.size();i++){
+            String id=ids.get(i), label=id;
+            if(catalog!=null){
+                for(Home.Entity e:catalog.entities()){
+                    if(e.id().equals(id)){label=e.label()+" · "+e.areaName();break;}
+                }
+            }
+            options[i]=(i+1)+".  "+label;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Uhr-Favoriten · "+ids.size()+"/24")
+                .setItems(options,(dialog,index)->{
+                    String entityId=ids.get(index);
+                    new AlertDialog.Builder(this)
+                        .setTitle(options[index])
+                        .setItems(new String[]{"↑  Nach oben","↓  Nach unten","✕  Entfernen"},
+                            (d,action)->{
+                                if(action==0 && index>0){
+                                    java.util.Collections.swap(ids,index,index-1);
+                                }else if(action==1 && index<ids.size()-1){
+                                    java.util.Collections.swap(ids,index,index+1);
+                                }else if(action==2){
+                                    ids.remove(entityId);
+                                }
+                                selected.setText(ids.size()+" Favoriten für die Uhr");
+                                persistSettings();
+                                showFavorites();
+                            }).show();
+                })
+                .setNeutralButton("Hinzufügen",(d,w)->chooseEntities())
+                .setPositiveButton("Fertig",null).show();
+    }
+
+    private void handleWatchIntent(Intent intent) {
+        if(intent==null)return;
+        if(intent.getBooleanExtra("watch_voice",false)) {
+            showTab(3);
+            voiceResult.setText("Uhr-Anfrage: Bitte am Handy auf \"Sprechen\" tippen.");
+            intent.removeExtra("watch_voice");
+        }
+        String lockId=intent.getStringExtra("watch_lock_id");
+        if(lockId!=null && !lockId.isBlank()) {
+            String name=intent.getStringExtra("watch_lock_title");
+            boolean unlock=intent.getBooleanExtra("watch_lock_unlock",false);
+            intent.removeExtra("watch_lock_id");
+            showTab(0);
+            new AlertDialog.Builder(this)
+                    .setTitle("Schlossaktion von Uhr bestätigen?")
+                    .setMessage((name==null?lockId:name)+"\n"+lockId+"\n\n"
+                            +(unlock?"Schloss entriegeln?":"Schloss verriegeln?")
+                            +"\nDie Aktion wird erst nach dieser Bestätigung gesendet.")
+                    .setNegativeButton("Abbrechen",null)
+                    .setPositiveButton(unlock?"Ja, entriegeln":"Ja, verriegeln",
+                            (dialog,which)->{
+                                startForegroundService(new Intent(this,BridgeService.class)
+                                        .setAction(BridgeService.ACTION_CONFIRM_LOCK)
+                                        .putExtra("lock_id",lockId)
+                                        .putExtra("unlock",unlock));
+                                toast("Bestätigung an die Bridge gesendet.");
+                            }).show();
+        }
+    }
+
+    private void startSpeech(){
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"de-DE");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Mit Home Assistant sprechen");
+        try {startActivityForResult(intent,speechCode);}
+        catch(ActivityNotFoundException e){
+            toast("Keine Android-Spracherkennung installiert. Bitte Texteingabe nutzen.");
+        }
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request==speechCode && result==RESULT_OK && data!=null){
+            ArrayList<String> recognized=data.getStringArrayListExtra(
+                    RecognizerIntent.EXTRA_RESULTS);
+            if(recognized!=null && !recognized.isEmpty()){
+                voiceText.setText(recognized.get(0));
+                askAssistant(recognized.get(0));
+            }
+        }
+    }
+
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleWatchIntent(intent);
+    }
+
+    private void askAssistant(String phrase){
+        if(voiceResult==null)return;
+        persistSettings();
+        final Home home;
+        try{home=new Home(url.getText().toString(),token.getText().toString());}
+        catch(Exception ex){voiceResult.setText("Bitte zuerst Home Assistant verbinden.");return;}
+        voiceResult.setText("Assistent antwortet …");
+        String agent=agentInput.getText().toString();
+        new Thread(()->{
+            try{
+                var reply=home.converse(phrase,agent,conversationId);
+                runOnUiThread(()->{
+                    if(isDestroyed())return;
+                    conversationId=reply.conversationId();
+                    voiceResult.setText(reply.text());
+                });
+            }catch(Exception ex){
+                runOnUiThread(()->voiceResult.setText("Fehler: "+ex.getMessage()));
+            }
+        },"HA Assist").start();
+    }
+
+    private TextView text(LinearLayout parent,String value) {
+        TextView t=UiKit.label(this,value,16,false,UiKit.INK);
+        parent.addView(t);return t;
+    }
+    private EditText input(LinearLayout parent,String label,String value,int type) {
+        return UiKit.field(this,parent,label,"",value,type);
+    }
+    private void button(LinearLayout parent,String label,Runnable action){
+        UiKit.button(this,parent,label,true,action);
     }
 
     private void toast(String value) { Toast.makeText(this, value, Toast.LENGTH_LONG).show(); }
@@ -243,6 +520,7 @@ public final class MainActivity extends Activity {
                         ids.addAll(chosen);
                         selected.setText(chosen.isEmpty() ? "Keine Favoriten ausgewählt"
                                 : chosen.size() + " Favoriten für die Uhr ausgewählt");
+                        persistSettings();
                         renderRoom();
                     });
                 });
@@ -291,6 +569,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     catalog = result;
+                    persistSettings();
                     for (Home.Entity entity : result.entities()) {
                         favoriteRooms.put(entity.id(), entity.areaName());
                     }
@@ -343,6 +622,25 @@ public final class MainActivity extends Activity {
             TextView detail = text(row, entity.areaName() + " · " + entity.display());
             detail.setTextSize(13);
             detail.setTextColor(MUTED);
+            if(entity.dimmable() && entity.state().equals("on")){
+                var brightness=UiKit.label(this,"Helligkeit "+entity.brightnessPercent()+" %",13,false,UiKit.MUTED);
+                row.addView(brightness);
+                SeekBar slider=new SeekBar(this);
+                slider.setMax(100);
+                slider.setProgress(Math.max(1,entity.brightnessPercent()));
+                slider.setProgressTintList(android.content.res.ColorStateList.valueOf(UiKit.ORANGE));
+                slider.setThumbTintList(android.content.res.ColorStateList.valueOf(UiKit.ORANGE));
+                row.addView(slider);
+                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    public void onProgressChanged(SeekBar bar,int value,boolean user){
+                        if(user)brightness.setText("Helligkeit "+value+" %");
+                    }
+                    public void onStartTrackingTouch(SeekBar bar){}
+                    public void onStopTrackingTouch(SeekBar bar){
+                        setBrightness(entity,Math.max(1,bar.getProgress()));
+                    }
+                });
+            }
             if (entity.isLock() && entity.controllable()) {
                 boolean unlock = entity.state().equals("locked");
                 button(row, unlock ? "Schloss entsperren …" : "Schloss verriegeln …",
@@ -362,6 +660,23 @@ public final class MainActivity extends Activity {
             hint.setTextColor(MUTED);
             hint.setTextSize(13);
         }
+    }
+
+    private void setBrightness(Home.Entity entity,int percent){
+        final Home home;
+        try{home=new Home(url.getText().toString(),token.getText().toString());}
+        catch(Exception ex){toast("Home Assistant Zugangsdaten fehlen.");return;}
+        new Thread(()->{
+            try{
+                home.setBrightness(entity,percent);
+                runOnUiThread(()->{
+                    toast("Helligkeit angepasst");
+                    refreshQuickActions();
+                });
+            }catch(Exception ex){
+                runOnUiThread(()->toast("Dimmen fehlgeschlagen: "+ex.getMessage()));
+            }
+        },"HA dimming").start();
     }
 
     private String iconFor(Home.Entity entity) {
@@ -503,6 +818,7 @@ public final class MainActivity extends Activity {
                     address = addresses.get(which);
                     watch.setText(descriptions.get(address));
                     scanState.setText("Ausgewählt: " + address);
+                    persistSettings();
                     stopScan.run();
                 })
                 .setNegativeButton("Schließen", (dialog, which) -> stopScan.run())
@@ -586,10 +902,12 @@ public final class MainActivity extends Activity {
         if (address == null || ids.isEmpty()) { toast("Bitte Uhr und Favoriten auswählen."); return; }
         try {
             new Home(url.getText().toString(), token.getText().toString());
+            persistSettings();
             startForegroundService(new Intent(this, BridgeService.class)
                     .putExtra("url", url.getText().toString()).putExtra("token", token.getText().toString())
                     .putExtra("address", address)
                     .putExtra("entities", ids.toArray(String[]::new))
+                    .putExtra("voice_agent",agentInput==null?"":agentInput.getText().toString())
                     .putExtra("rooms", ids.stream()
                             .map(id -> favoriteRooms.getOrDefault(id, "Favoriten"))
                             .toArray(String[]::new)));
