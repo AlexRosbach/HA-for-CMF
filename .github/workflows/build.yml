@@ -78,7 +78,7 @@ jobs:
             echo "Release v0.7.0 already exists"
             exit 0
           fi
-          sha256sum dist/ha-for-cmf-android.apk dist/ha-for-cmf.wp2app > dist/SHA256SUMS
+          (cd dist && sha256sum ha-for-cmf-android.apk ha-for-cmf.wp2app > SHA256SUMS)
           gh release create v0.7.0 \
             dist/ha-for-cmf-android.apk \
             dist/ha-for-cmf.wp2app \
