@@ -37,8 +37,6 @@ public final class MainActivity extends Activity {
     private String address;
     private Runnable stopScan = () -> {};
     private static final int ORANGE = Color.rgb(255, 105, 25);
-    private static final int TEXT = Color.rgb(27, 29, 34);
-    private static final int MUTED = Color.rgb(104, 110, 120);
     private static final int SURFACE = Color.rgb(247, 248, 250);
     private LinearLayout content;
     private LinearLayout[] pages;
@@ -67,20 +65,24 @@ public final class MainActivity extends Activity {
         var h = text(parent, title);
         h.setTextSize(25);
         h.setTypeface(null, Typeface.BOLD);
-        h.setTextColor(TEXT);
+        h.setTextColor(UiKit.INK);
         if (detail != null) {
             var description = text(parent, detail);
             description.setTextSize(14);
-            description.setTextColor(MUTED);
+            description.setTextColor(UiKit.MUTED);
             description.setPadding(0, dp(6), 0, dp(10));
         }
     }
 
     @Override protected void onCreate(Bundle state) {
+        boolean dark=UiKit.dark(this);
+        setTheme(dark?android.R.style.Theme_Material_NoActionBar:
+                android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(state);
+        UiKit.configure(this);
         getWindow().setStatusBarColor(UiKit.BG);
         getWindow().setNavigationBarColor(UiKit.BG);
-        getWindow().getDecorView().setSystemUiVisibility(
+        getWindow().getDecorView().setSystemUiVisibility(dark?0:
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
 
         var root = UiKit.column(this);
@@ -101,7 +103,7 @@ public final class MainActivity extends Activity {
 
         var top = UiKit.row(this);
         top.setPadding(dp(20),dp(12),dp(20),dp(8));
-        top.setBackgroundColor(Color.WHITE);
+        top.setBackgroundColor(UiKit.CARD);
         var logo = UiKit.label(this,"⌂",24,true,UiKit.ORANGE);
         top.addView(logo,new LinearLayout.LayoutParams(dp(36),dp(40)));
         var name = UiKit.label(this,"HA for CMF",20,true,UiKit.INK);
@@ -230,6 +232,69 @@ public final class MainActivity extends Activity {
             }
         });
 
+        UiKit.title(this,settingsPage,"Sprache & Darstellung",
+                "Für Handy und Uhr. Die Ansicht wird nach der Auswahl neu geladen.");
+        var appearance=card(settingsPage);
+        TextView languageLabel=UiKit.label(this,"Sprache",15,true,UiKit.INK);
+        appearance.addView(languageLabel);
+        Spinner languageSpinner=new Spinner(this);
+        String[] languages={"Deutsch","English"};
+        var languageAdapter=new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_dropdown_item,languages){
+            @Override public View getView(int position,View recycled,android.view.ViewGroup parent){
+                TextView view=(TextView)super.getView(position,recycled,parent);
+                view.setTextColor(UiKit.INK);return view;
+            }
+        };
+        languageSpinner.setAdapter(languageAdapter);
+        appearance.addView(languageSpinner,new LinearLayout.LayoutParams(-1,dp(52)));
+        languageSpinner.setSelection(LocaleKit.english(this)?1:0);
+        languageSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view,int position,long id){
+                String next=position==1?"en":"de";
+                if(!next.equals(SettingsStore.load(MainActivity.this,"language"))){
+                    SettingsStore.save(MainActivity.this,"language",next);
+                    BridgeService.notifyPagesChanged();
+                    recreate();
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        TextView designLabel=UiKit.label(this,"Design",15,true,UiKit.INK);
+        appearance.addView(designLabel);
+        Spinner themeSpinner=new Spinner(this);
+        String[] themes={"System","Hell","Dunkel"};
+        var themeAdapter=new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_dropdown_item,themes){
+            @Override public View getView(int position,View recycled,android.view.ViewGroup parent){
+                TextView view=(TextView)super.getView(position,recycled,parent);
+                view.setTextColor(UiKit.INK);view.setText(LocaleKit.t(MainActivity.this,themes[position]));
+                return view;
+            }
+            @Override public View getDropDownView(int position,View recycled,android.view.ViewGroup parent){
+                TextView view=(TextView)super.getDropDownView(position,recycled,parent);
+                view.setText(LocaleKit.t(MainActivity.this,themes[position]));return view;
+            }
+        };
+        themeSpinner.setAdapter(themeAdapter);
+        appearance.addView(themeSpinner,new LinearLayout.LayoutParams(-1,dp(52)));
+        String savedTheme=SettingsStore.load(this,"theme");
+        themeSpinner.setSelection("light".equals(savedTheme)?1:"dark".equals(savedTheme)?2:0);
+        themeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
+                String next=position==1?"light":position==2?"dark":"system";
+                String previous=SettingsStore.load(MainActivity.this,"theme");
+                if(previous.isBlank())previous="system";
+                if(!next.equals(previous)){
+                    SettingsStore.save(MainActivity.this,"theme",next);
+                    BridgeService.notifyPagesChanged();
+                    recreate();
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+
         UiKit.title(this,settingsPage,"Home Assistant verbinden",
                 "Verbindung zu deiner Home-Assistant-Instanz.");
         var homeCard=card(settingsPage);
@@ -259,7 +324,7 @@ public final class MainActivity extends Activity {
 
         var nav=UiKit.row(this);
         nav.setPadding(dp(4),dp(4),dp(4),dp(9));
-        nav.setBackgroundColor(Color.WHITE);
+        nav.setBackgroundColor(UiKit.CARD);
         root.addView(nav,new LinearLayout.LayoutParams(-1,dp(68)));
         String[] tabs={"⌂\nZuhause","⌕\nEntitäten","◉\nUhr","⚙\nEinstellungen"};
         tabLabels=new TextView[4];
@@ -267,7 +332,7 @@ public final class MainActivity extends Activity {
             final int index=i;
             TextView t=UiKit.label(this,tabs[i],11,true,UiKit.MUTED);
             t.setGravity(android.view.Gravity.CENTER);
-            t.setBackground(UiKit.bg(this,Color.WHITE,12,0));
+            t.setBackground(UiKit.bg(this,UiKit.CARD,12,0));
             nav.addView(t,new LinearLayout.LayoutParams(0,-1,1));
             t.setOnClickListener(v->showTab(index));
             tabLabels[i]=t;
@@ -286,7 +351,7 @@ public final class MainActivity extends Activity {
         welcome.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout panel=UiKit.column(this);
         panel.setPadding(dp(28),dp(70),dp(28),dp(32));
-        panel.setBackgroundColor(Color.WHITE);
+        panel.setBackgroundColor(UiKit.CARD);
         var spacer=new View(this);
         panel.addView(spacer,new LinearLayout.LayoutParams(-1,0,1));
         TextView icon=UiKit.label(this,"⌂",74,true,UiKit.ORANGE);
@@ -310,7 +375,7 @@ public final class MainActivity extends Activity {
         welcome.show();
         if(welcome.getWindow()!=null){
             welcome.getWindow().setLayout(-1,-1);
-            welcome.getWindow().setBackgroundDrawableResource(android.R.color.white);
+            welcome.getWindow().setBackgroundDrawable(UiKit.bg(this,UiKit.CARD,0,0));
         }
     }
 
@@ -321,7 +386,7 @@ public final class MainActivity extends Activity {
             if(tabLabels!=null && tabLabels[i]!=null){
                 tabLabels[i].setTextColor(i==index?UiKit.INK:UiKit.MUTED);
                 tabLabels[i].setBackground(UiKit.bg(this,
-                        i==index?UiKit.PEACH:Color.WHITE,12,0));
+                        i==index?UiKit.PEACH:UiKit.CARD,12,0));
             }
         }
         if(screenScroll!=null)screenScroll.scrollTo(0,0);
@@ -531,7 +596,7 @@ public final class MainActivity extends Activity {
             return a.label().compareToIgnoreCase(b.label());
         });
         TextView count = text(quickActions, items.size() + " Entitäten");
-        count.setTextColor(MUTED);
+        count.setTextColor(UiKit.MUTED);
         count.setTextSize(12);
         int limit = Math.min(items.size(), 30);
         for (int i = 0; i < limit; i++) {
@@ -542,7 +607,7 @@ public final class MainActivity extends Activity {
             label.setTypeface(null, Typeface.BOLD);
             TextView detail = text(row, entity.areaName() + " · " + entity.display());
             detail.setTextSize(13);
-            detail.setTextColor(MUTED);
+            detail.setTextColor(UiKit.MUTED);
             if(entity.dimmable() && entity.state().equals("on")){
                 var brightness=UiKit.label(this,"Helligkeit "+entity.brightnessPercent()+" %",13,false,UiKit.MUTED);
                 row.addView(brightness);
@@ -578,7 +643,7 @@ public final class MainActivity extends Activity {
         if (items.size() > limit) {
             TextView hint = text(quickActions, "Weitere " + (items.size() - limit)
                     + " Geräte: Filtere im Entitäten-Browser oder wähle einen anderen Raum.");
-            hint.setTextColor(MUTED);
+            hint.setTextColor(UiKit.MUTED);
             hint.setTextSize(13);
         }
     }
