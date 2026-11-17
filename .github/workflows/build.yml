@@ -31,8 +31,12 @@ jobs:
           java-version: '17'
       - name: Install Android SDK
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Create CI test signing key
         run: |
           keytool -genkeypair -keystore "$RUNNER_TEMP/ci-test.jks" -alias ci -keyalg RSA -keysize 2048 -validity 3650 -storepass android -keypass android -dname "CN=CI Test, O=HA for CMF"
