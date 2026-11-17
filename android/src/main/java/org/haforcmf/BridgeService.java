@@ -19,6 +19,8 @@ public final class BridgeService extends Service {
     private static final String CHANNEL = "wp2-bridge";
     static volatile String status = "Bridge stopped";
     private Thread worker;
+    private static volatile long pagesVersion = 0;
+    static void notifyPagesChanged() { pagesVersion++; }
     static final String ACTION_CONFIRM_LOCK = "org.haforcmf.CONFIRM_LOCK";
     private volatile String pendingLockId;
     private volatile boolean pendingUnlock;
@@ -62,51 +64,55 @@ public final class BridgeService extends Service {
         return START_NOT_STICKY;
     }
 
-    static byte[] snapshot(char kind, List<String> wanted, Map<String, Home.Entity> states) {
+    static byte[] snapshot(char kind, Page page, Map<String, Home.Entity> states) {
         var out = new ByteArrayOutputStream();
         writeAscii(out, "ha2" + kind);
-        out.write(wanted.size());
-        for (String id : wanted) {
+        out.write(page.ids().size());
+        for (int i=0;i<page.ids().size();i++) {
+            String id = page.ids().get(i);
+            if (id.isBlank()) {
+                out.write(0);out.write(0);out.write(0);
+                continue;
+            }
             Home.Entity entry = states.get(id);
             String fallback = id.substring(id.indexOf('.') + 1).replace('_', ' ');
-            String title = Home.ascii(entry == null ? fallback : entry.label(), 10);
-            if (title.isEmpty()) title = Home.ascii(fallback, 10);
-            String value = Home.ascii(entry == null ? "Offline" : entry.display(), 10);
+            String alias = page.labels().size()>i ? page.labels().get(i) : "";
+            String actualName = alias.isBlank()
+                    ? (entry == null ? fallback : entry.label()) : alias;
+            String title = Home.ascii(WatchPages.shortLabel(actualName), 10);
+            if (title.isBlank()) title = Home.ascii(fallback,10);
+            String value = Home.ascii(entry==null ? "Offline" : entry.display(),10);
             int flags = 0;
             if (entry != null && entry.isLock()) {
-                if ("locked".equals(entry.state())) flags = 5; // Action + confirmation required
-                if ("unlocked".equals(entry.state())) flags = 7; // Active + confirmation required
+                if ("locked".equals(entry.state())) flags=5;
+                else if ("unlocked".equals(entry.state())) flags=7;
             } else if (entry != null && entry.canSwitch()) {
-                flags = ("on".equals(entry.state()) ? 3 : 1);
+                flags = "on".equals(entry.state()) ? 3 : 1;
             }
             out.write(flags);
             out.write(title.length());
             out.write(value.length());
-            writeAscii(out, title);
-            writeAscii(out, value);
+            writeAscii(out,title);
+            writeAscii(out,value);
         }
         return out.toByteArray();
     }
 
-    record Page(String room, List<String> ids) {}
-    static List<Page> pagesFor(List<String> ids, String[] roomNames) {
-        var groups = new LinkedHashMap<String, List<String>>();
-        for (int i = 0; i < ids.size(); i++) {
-            String name = roomNames != null && i < roomNames.length ? roomNames[i] : "Favoriten";
-            if (name == null || name.isBlank()) name = "Favoriten";
-            groups.computeIfAbsent(name, key -> new ArrayList<>()).add(ids.get(i));
-        }
+    record Page(String room, List<String> ids, List<String> labels) {}
+
+    static List<Page> pagesFor(WatchPages config) {
         var pages = new ArrayList<Page>();
-        if (ids.isEmpty()) {
-            // Show an honest connected but empty state on the watch.
-            pages.add(new Page("Favoriten", List.of()));
-        }
-        for (var group : groups.entrySet()) {
-            var members = group.getValue();
-            for (int start = 0; start < members.size(); start += 4) {
-                int end = Math.min(start + 4, members.size());
-                pages.add(new Page(group.getKey(), List.copyOf(members.subList(start, end))));
+        for(WatchPages.Page source:config.pages){
+            List<String> ids=new ArrayList<>(4),labels=new ArrayList<>(4);
+            for(int i=0;i<WatchPages.SLOTS;i++){
+                ids.add(source.ids[i]);
+                labels.add(source.labels[i]);
             }
+            pages.add(new Page(source.title,List.copyOf(ids),List.copyOf(labels)));
+        }
+        if(pages.isEmpty()){
+            pages.add(new Page("Favoriten",
+                    List.of("","","",""),List.of("","","","")));
         }
         return pages;
     }
@@ -114,7 +120,7 @@ public final class BridgeService extends Service {
     static byte[] snapshotPage(char kind, Page page, int index, int total,
             Map<String, Home.Entity> states) {
         var out = new ByteArrayOutputStream();
-        byte[] tiles = snapshot(kind, page.ids(), states);
+        byte[] tiles = snapshot(kind, page, states);
         out.write(tiles, 0, tiles.length);
         String label = Home.ascii(page.room(), 18);
         out.write(index);
@@ -127,20 +133,6 @@ public final class BridgeService extends Service {
     private static void writeAscii(ByteArrayOutputStream out, String text) {
         byte[] bytes = text.getBytes(StandardCharsets.US_ASCII);
         out.write(bytes, 0, bytes.length);
-    }
-
-    private void notifyWatchVoice() {
-        var intent=new Intent(this,MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra("watch_voice",true);
-        var pending=PendingIntent.getActivity(this,41,intent,
-                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        var note=new Notification.Builder(this,CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("HA for CMF · Spracheingabe")
-                .setContentText("Tippen, um am Handy mit Home Assistant zu sprechen")
-                .setContentIntent(pending).setAutoCancel(true).build();
-        getSystemService(NotificationManager.class).notify(41,note);
     }
 
     private void notifyLockConfirmation(Home.Entity entity, boolean unlock) {
@@ -163,24 +155,43 @@ public final class BridgeService extends Service {
         status="Schlossaktion wartet auf Bestätigung am Handy";
     }
 
-    static List<String> searchEntities(Home.Catalog catalog,String query) {
-        String normalized=Home.ascii(query,64).toLowerCase(java.util.Locale.ROOT);
-        ArrayList<String> results=new ArrayList<>();
-        for (Home.Entity entity : catalog.entities()) {
-            String data=Home.ascii(entity.label()+" "+entity.id()+" "+entity.areaName(),100)
-                    .toLowerCase(java.util.Locale.ROOT);
-            boolean matches=true;
-            for(String word:normalized.trim().split("\\s+")) {
-                if (!word.isBlank() && !data.contains(word)){matches=false;break;}
-            }
-            if(matches)results.add(entity.id());
+    static List<String> byCategory(Home.Catalog catalog, byte category) {
+        var results=new ArrayList<Home.Entity>();
+        for(Home.Entity entity:catalog.entities()){
+            String domain=entity.domain();
+            boolean include=switch(category){
+                case 'L' -> domain.equals("light");
+                case 'S' -> domain.equals("switch") || domain.equals("input_boolean");
+                case 'C' -> domain.equals("scene") || domain.equals("script")
+                        || domain.equals("button") || domain.equals("input_button");
+                case 'T' -> domain.equals("sensor") || domain.equals("binary_sensor");
+                default -> false;
+            };
+            if(include) results.add(entity);
         }
-        return results;
+        results.sort((a,b)->a.label().compareToIgnoreCase(b.label()));
+        var ids=new ArrayList<String>();
+        for(Home.Entity entity:results) ids.add(entity.id());
+        return ids;
     }
-
-    private void sendWatchAnswer(WatchLink link,int slot,String answer) throws Exception {
-        byte[] data=("ha2Y"+Home.ascii(answer,93)).getBytes(StandardCharsets.US_ASCII);
-        link.send(slot,data);
+    static String categoryName(byte category){
+        return switch(category){
+            case 'L' -> "LICHTER";
+            case 'S' -> "SCHALTER";
+            case 'C' -> "SZENEN";
+            case 'T' -> "SENSOREN";
+            default -> "SUCHE";
+        };
+    }
+    private static Page searchPage(List<String> results,String title,int pageIndex){
+        var ids=new ArrayList<String>();
+        var labels=new ArrayList<String>();
+        for(int slot=0;slot<4;slot++){
+            int at=pageIndex*4+slot;
+            ids.add(at<results.size()?results.get(at):"");
+            labels.add("");
+        }
+        return new Page(title,List.copyOf(ids),List.copyOf(labels));
     }
 
     private void loop(Intent intent, int startId) {
@@ -199,86 +210,83 @@ public final class BridgeService extends Service {
             var home = new Home(intent.getStringExtra("url"), intent.getStringExtra("token"));
             currentUrl=intent.getStringExtra("url");
             currentToken=intent.getStringExtra("token");
-            var ids = List.of(intent.getStringArrayExtra("entities"));
-            if (ids.size() > 24) throw new IllegalArgumentException("Maximum 24 entities");
-            var pages = pagesFor(ids, intent.getStringArrayExtra("rooms"));
+            String[] legacy = intent.getStringArrayExtra("entities");
+            String[] areaLabels=intent.getStringArrayExtra("rooms");
+            var ids=legacy==null?List.<String>of():List.of(legacy);
+            var rooms=new java.util.HashMap<String,String>();
+            if(areaLabels!=null)for(int i=0;i<Math.min(ids.size(),areaLabels.length);i++)
+                rooms.put(ids.get(i),areaLabels[i]);
+            var pages=pagesFor(WatchPages.load(this,ids,rooms));
+            long currentVersion=pagesVersion;
             Home.Catalog catalog=home.catalog();
             boolean searching=false;
-            String query="";
-            List<String> matching=List.of();
-            String voiceAgent=intent.getStringExtra("voice_agent");
-            int pageIndex = 0;
+            List<String> matches=List.of();
+            byte category='L';
+            int searchIndex=0;
+            int pageIndex=0;
             int slot = link.findApp();
             status = "Ready. Dismiss Paired on the watch, then open ha-for-cmf.";
             while (!Thread.currentThread().isInterrupted()) {
+                if(pagesVersion!=currentVersion){
+                    currentVersion=pagesVersion;
+                    pages=pagesFor(WatchPages.load(this,ids,rooms));
+                    pageIndex=Math.min(pageIndex,pages.size()-1);
+                }
                 link.ping();
                 for (byte[] event; (event = link.pollEvent()) != null;) {
                     if (event.length < 6 || Byte.toUnsignedInt(event[1]) != slot) continue;
                     String command = new String(event, 2, 4, StandardCharsets.US_ASCII);
-                    boolean action = event.length == 7 && ("ha2U".equals(command) || "ha2D".equals(command));
-                    boolean navigate = event.length == 6 && ("ha2R".equals(command)
-                            || "ha2N".equals(command) || "ha2P".equals(command)
-                            || "ha2H".equals(command));
-                    boolean find = event.length >= 6 && "ha2Q".equals(command);
-                    boolean textQuery = event.length > 6 && "ha2T".equals(command);
-                    boolean voiceRequest = event.length == 6 && "ha2V".equals(command);
-                    if (!action && !navigate && !find && !textQuery && !voiceRequest) continue;
-                    if (voiceRequest) {
-                        notifyWatchVoice();
-                        sendWatchAnswer(link,slot,"Bitte am Handy sprechen");
-                        continue;
-                    }
-                    if (textQuery) {
-                        String input=new String(event,6,event.length-6,StandardCharsets.US_ASCII).trim();
-                        try {
-                            Home.ConversationReply reply=home.converse(input,voiceAgent,"");
-                            sendWatchAnswer(link,slot,reply.text());
-                        } catch(Exception ex) {
-                            sendWatchAnswer(link,slot,"Assist Fehler");
-                        }
-                        continue;
-                    }
-                    if (find) {
-                        query=new String(event,6,event.length-6,StandardCharsets.US_ASCII).trim();
-                        if (query.length()>16)query=query.substring(0,16);
+                    boolean action=event.length==7 &&
+                            ("ha2U".equals(command)||"ha2D".equals(command));
+                    boolean navigate=event.length==6 &&
+                            ("ha2R".equals(command)||"ha2N".equals(command)
+                            ||"ha2P".equals(command)||"ha2H".equals(command));
+                    boolean chooseCategory=event.length==7 && "ha2Q".equals(command);
+                    if(!action&&!navigate&&!chooseCategory)continue;
+                    if(chooseCategory){
+                        category=event[6];
                         searching=true;
-                        catalog=home.catalog();
-                        matching=searchEntities(catalog,query);
+                        searchIndex=0;
+                        matches=byCategory(catalog,category);
                     }
-                    if ("ha2H".equals(command)) searching=false;
-                    if (!searching) {
-                        if ("ha2N".equals(command)) pageIndex=(pageIndex+1)%pages.size();
-                        if ("ha2P".equals(command)) pageIndex=(pageIndex+pages.size()-1)%pages.size();
+                    if("ha2H".equals(command))searching=false;
+                    if("ha2N".equals(command)){
+                        if(searching){
+                            searchIndex=(searchIndex+1)%Math.max(1,(matches.size()+3)/4);
+                        } else pageIndex=(pageIndex+1)%pages.size();
                     }
-                    Page page;
-                    if (searching) {
-                        // The watch sends a narrowed query. It displays three results at a time.
-                        var hit=matching.subList(0,Math.min(3,matching.size()));
-                        page=new Page(query.isEmpty()?"SUCHE":("SUCHE "+query),hit);
-                    } else page=pages.get(pageIndex);
+                    if("ha2P".equals(command)){
+                        if(searching){
+                            int total=Math.max(1,(matches.size()+3)/4);
+                            searchIndex=(searchIndex+total-1)%total;
+                        } else pageIndex=(pageIndex+pages.size()-1)%pages.size();
+                    }
+                    Page page=searching ?
+                            searchPage(matches,categoryName(category),searchIndex)
+                            : pages.get(pageIndex);
                     Map<String, Home.Entity> states;
-                    try {
+                    try{
                         states=home.states();
-                        if (action) {
+                        if(action){
                             int index=Byte.toUnsignedInt(event[6]);
-                            Home.Entity entity=index < page.ids().size()
-                                    ? states.get(page.ids().get(index)) : null;
-                            if (entity != null) {
-                                if (entity.isLock()) {
-                                    // BLE requests are untrusted. Never unlock directly from a watch frame.
+                            Home.Entity entity=index<page.ids().size()?
+                                    states.get(page.ids().get(index)):null;
+                            if(entity!=null){
+                                if(entity.isLock()){
                                     notifyLockConfirmation(entity,"ha2U".equals(command));
-                                } else if(entity.canSwitch()) {
+                                } else if(entity.canSwitch()){
                                     home.set(entity,"ha2U".equals(command));
                                 }
                             }
                             states=home.states();
                         }
-                    } catch(Exception ex) {
+                    }catch(Exception ex){
                         states=Map.of();
                     }
-                    int current=searching?0:pageIndex;
-                    int total=searching?1:pages.size();
-                    link.send(slot,snapshotPage(action?'A':'S',page,current,total,states));
+                    int current=searching?searchIndex:pageIndex;
+                    int total=searching?Math.max(1,(matches.size()+3)/4):pages.size();
+                    link.send(slot,snapshotPage(action?'A':'S',
+                            page,current,total,states));
                 }
                 Thread.sleep(400);
             }
