@@ -34,13 +34,11 @@ HA for CMF is an **experimental, community-developed** Android companion and cus
 > [!WARNING]
 > This is an **experimental prerelease**. Building the APK and watch package does not prove Bluetooth, loader, or lock behaviour on every real watch/phone. **Do not depend on it as your only way to unlock a door.**
 
-## Screenshots and previews
+## Screenshots — actual app, anonymised
 
-| Existing watch emulator reference | Earlier design concept |
-|---|---|
-| ![Legacy watch emulator tiles](docs/four-entities.png) | ![Watch UX concept, not an actual device screenshot](docs/watch-mockups.png) |
+![HA for CMF Android screenshots: rooms, searchable entities, editable watch page preview and bridge settings](docs/screenshots/readme-ui-redacted.jpg)
 
-These are existing **reference images, not verified screenshots of v0.7**. Up-to-date Android light/dark and watch screenshots will be added after they have been captured and sanitised. See the [screenshot contribution guide](docs/SCREENSHOTS.md).
+<sub>Actual Android v0.6 screens provided during testing, cropped and anonymised for public documentation. Original Home Assistant entity IDs, Bluetooth MAC addresses, device-specific names and notification/status-bar content have been replaced with **example values**. These captures are **not** a claim that v0.7 light/dark modes or watch hardware have been validated. See [screenshot policy](docs/SCREENSHOTS.md).</sub>
 
 ## Quick start
 
@@ -62,7 +60,7 @@ For permissions, pairing failures, loader requirements, and signature conflicts,
 | Android | Android 12+ (API 31+), Bluetooth LE |
 | Watch | CMF Watch Pro 2 and a compatible WP2 Apps loader |
 | Home Assistant | API reachable from the phone, a long-lived access token |
-| Network | HTTPS strongly recommended when connecting outside your trusted LAN |
+| Network | HTTPS **required**; HTTP is blocked to protect the access token |
 | Watch firmware | Stock firmware alone is not enough for this custom app |
 
 **Not supported:** Wear OS, official Nothing X plugin installation, direct microphone recording from this watch custom app, health sync, guaranteed integration with every lock/scene/entity, and automatic firmware flashing.
