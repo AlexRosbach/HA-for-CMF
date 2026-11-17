@@ -118,7 +118,7 @@ public final class BridgeService extends Service {
     }
 
     static byte[] snapshotPage(char kind, Page page, int index, int total,
-            Map<String, Home.Entity> states) {
+            Map<String, Home.Entity> states, int uiFlags) {
         var out = new ByteArrayOutputStream();
         byte[] tiles = snapshot(kind, page, states);
         out.write(tiles, 0, tiles.length);
@@ -127,7 +127,20 @@ public final class BridgeService extends Service {
         out.write(total);
         out.write(label.length());
         writeAscii(out, label);
+        out.write(uiFlags);
         return out.toByteArray();
+    }
+
+    private int watchDisplayFlags() {
+        boolean english=LocaleKit.english(this);
+        String theme=SettingsStore.load(this,"theme");
+        boolean light="light".equals(theme);
+        if(!"light".equals(theme) && !"dark".equals(theme)){
+            light=(getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                != android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        }
+        return (english?1:0)|(light?2:0);
     }
 
     private static void writeAscii(ByteArrayOutputStream out, String text) {
@@ -286,7 +299,7 @@ public final class BridgeService extends Service {
                     int current=searching?searchIndex:pageIndex;
                     int total=searching?Math.max(1,(matches.size()+3)/4):pages.size();
                     link.send(slot,snapshotPage(action?'A':'S',
-                            page,current,total,states));
+                            page,current,total,states,watchDisplayFlags()));
                 }
                 Thread.sleep(400);
             }
