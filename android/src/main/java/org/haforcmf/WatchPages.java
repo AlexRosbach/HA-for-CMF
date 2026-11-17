@@ -87,6 +87,24 @@ final class WatchPages {
         return result;
     }
 
+    /** Human-readable fallback for the watch's narrow tiles; custom aliases override it. */
+    static String shortLabel(String original) {
+        if(original==null || original.isBlank())return "Unbenannt";
+        String name=original.trim();
+        int hyphen=name.lastIndexOf(" - ");
+        if(hyphen>=0 && hyphen+3<name.length())name=name.substring(hyphen+3).trim();
+        if(name.length()>10){
+            String[] words=name.split("\\s+");
+            for(int i=words.length-1;i>=0;i--){
+                if(words[i].length()>=3 && words[i].length()<=10){
+                    name=words[i];
+                    break;
+                }
+            }
+        }
+        return name;
+    }
+
     static boolean validId(String id) {
         return id!=null && id.matches("[a-z0-9_]+\\.[a-z0-9_]+");
     }
