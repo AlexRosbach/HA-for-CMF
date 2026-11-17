@@ -62,7 +62,7 @@ final class WatchPreview extends View {
         c.drawText(line,center,y,paint);
     }
     private String title(int slot){
-        if(page.ids[slot].isBlank())return "Belegen";
+        if(page.ids[slot].isBlank())return LocaleKit.english(getContext())?"ADD":"BELEGEN";
         if(!page.labels[slot].isBlank())return page.labels[slot];
         Home.Entity e=catalog.get(page.ids[slot]);
         return WatchPages.shortLabel(e==null
@@ -76,29 +76,36 @@ final class WatchPreview extends View {
         canvas.save();
         canvas.translate(left,top);
         canvas.scale(size/466f,size/466f);
+        boolean light=!UiKit.dark((android.app.Activity)getContext());
+        boolean english=LocaleKit.english(getContext());
+        int back=light?Color.rgb(248,249,251):Color.rgb(8,10,13);
+        int tileBack=light?Color.rgb(229,234,241):Color.rgb(37,39,44);
+        int foreground=light?Color.rgb(16,19,25):Color.WHITE;
+        int accentText=Color.rgb(16,19,25);
+        int secondary=light?Color.rgb(74,82,95):Color.rgb(206,215,224);
         fill(Color.rgb(55,60,66));canvas.drawCircle(233,233,229,paint);
-        fill(Color.rgb(8,10,13));canvas.drawCircle(233,233,217,paint);
-        rounded(canvas,122,44,222,42,18,Color.rgb(37,39,44));
-        txt(canvas,"VERBUNDEN",233,71,20,Color.rgb(90,220,146),true,13);
-        txt(canvas,page.title,233,130,26,Color.WHITE,true,13);
+        fill(back);canvas.drawCircle(233,233,217,paint);
+        rounded(canvas,122,44,222,42,18,tileBack);
+        txt(canvas,english?"CONNECTED":"VERBUNDEN",233,71,20,light?Color.rgb(12,110,63):Color.rgb(90,220,146),true,13);
+        txt(canvas,page.title,233,130,26,foreground,true,13);
         for(int i=0;i<4;i++){
             int x=(i%2==0)?75:245;
             int y=(i/2==0)?152:265;
             Home.Entity e=catalog.get(page.ids[i]);
             boolean active=e!=null && e.state().equals("on");
             boolean missing=page.ids[i].isBlank();
-            int bg=active?Color.rgb(255,106,24):Color.rgb(38,42,48);
+            int bg=active?Color.rgb(255,106,24):tileBack;
             rounded(canvas,x,y,146,99,18,bg);
-            int labelColor=active?Color.rgb(16,19,25):Color.WHITE;
+            int labelColor=active?accentText:foreground;
             txt(canvas,title(i),x+73,y+35,19,labelColor,true,11);
             String state=missing ? "+" : e==null ? "—" : e.display();
             txt(canvas,state,x+73,y+73,16,labelColor,false,10);
         }
-        rounded(canvas,99,381,89,42,14,Color.rgb(37,39,44));
-        txt(canvas,"SUCHE",143,408,16,Color.rgb(255,106,24),true,6);
-        txt(canvas,"‹",216,411,32,Color.WHITE,true,1);
-        txt(canvas,"›",255,411,32,Color.WHITE,true,1);
-        txt(canvas,(index+1)+"/"+total,323,410,19,Color.WHITE,true,7);
+        rounded(canvas,99,381,89,42,14,tileBack);
+        txt(canvas,english?"SEARCH":"SUCHE",143,408,16,Color.rgb(255,106,24),true,6);
+        txt(canvas,"‹",216,411,32,foreground,true,1);
+        txt(canvas,"›",255,411,32,foreground,true,1);
+        txt(canvas,(index+1)+"/"+total,323,410,19,secondary,true,7);
         canvas.restore();
     }
     @Override public boolean onTouchEvent(MotionEvent event){
