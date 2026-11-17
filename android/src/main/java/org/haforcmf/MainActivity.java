@@ -157,6 +157,14 @@ public final class MainActivity extends Activity {
         button(entityCard,"⌕  Alle Entitäten durchsuchen",this::chooseEntities);
         button(entityCard,"♥  Favoriten für die Uhr",this::showFavorites);
         selected=text(entityCard,"Noch keine Favoriten ausgewählt");
+        String storedIds=SettingsStore.load(this,"favorites");
+        if(!storedIds.isBlank()){
+            for(String id:storedIds.split(",")){
+                if(ids.size()>=24)break;
+                if(id.matches("[a-z0-9_]+\\.[a-z0-9_]+"))ids.add(id);
+            }
+            selected.setText(ids.size()+" Favoriten für die Uhr");
+        }
         selected.setTextColor(UiKit.MUTED);
         var info=text(entityPage,"Filtere nach Raum, Gerätetyp, Status und Favoriten. "
                 +"Du kannst bis zu 24 Einträge für die Uhr festlegen.");
@@ -168,6 +176,8 @@ public final class MainActivity extends Activity {
         var watchTitle=text(connection,"CMF Watch Pro 2");
         watchTitle.setTextSize(19);watchTitle.setTypeface(null,Typeface.BOLD);
         watch=text(connection,"Noch keine Uhr ausgewählt");
+        String priorAddress=SettingsStore.load(this,"watch_address");
+        if(!priorAddress.isBlank()){address=priorAddress;watch.setText("Gespeicherte Uhr: "+priorAddress);}
         watch.setTextColor(UiKit.MUTED);
         scanState=text(connection,"Bluetooth-Suche bereit");
         scanState.setTextSize(13);scanState.setTextColor(UiKit.MUTED);
@@ -206,6 +216,9 @@ public final class MainActivity extends Activity {
         token=input(homeCard,"Zugriffstoken","",
                 InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         token.setSaveEnabled(false);
+        url.setText(SettingsStore.load(this,"ha_url").isBlank()?
+                "http://homeassistant.local:8123":SettingsStore.load(this,"ha_url"));
+        token.setText(SettingsStore.load(this,"ha_token"));
         button(homeCard,"Verbindung testen und Räume laden",()->{
             showTab(0);
             refreshQuickActions();
@@ -218,7 +231,7 @@ public final class MainActivity extends Activity {
                 "Assistent auf dem Handy auswählen. Keine Uhren-Mikrofonaufnahme.");
         var voiceCard=card(settingsPage);
         agentInput=UiKit.field(this,voiceCard,"Home Assistant Agent-ID (optional)",
-                "Leer = Standardassistent","",InputType.TYPE_CLASS_TEXT);
+                "Leer = Standardassistent",SettingsStore.load(this,"agent"),InputType.TYPE_CLASS_TEXT);
         var agentHint=text(voiceCard,"Beispiel: conversation.home_assistant. "
                 +"Andere Agenten müssen in Home Assistant eingerichtet sein.");
         agentHint.setTextColor(UiKit.MUTED);agentHint.setTextSize(13);
@@ -272,6 +285,16 @@ public final class MainActivity extends Activity {
         if(screenScroll!=null)screenScroll.scrollTo(0,0);
     }
 
+    private void persistSettings(){
+        if(url!=null && token!=null){
+            SettingsStore.save(this,"ha_url",url.getText().toString());
+            SettingsStore.save(this,"ha_token",token.getText().toString());
+        }
+        SettingsStore.save(this,"favorites",String.join(",",ids));
+        SettingsStore.save(this,"watch_address",address==null?"":address);
+        if(agentInput!=null)SettingsStore.save(this,"agent",agentInput.getText().toString());
+    }
+
     private void showFavorites(){
         if(ids.isEmpty()){
             new AlertDialog.Builder(this).setTitle("Favoriten fehlen")
@@ -306,6 +329,7 @@ public final class MainActivity extends Activity {
                                     ids.remove(entityId);
                                 }
                                 selected.setText(ids.size()+" Favoriten für die Uhr");
+                                persistSettings();
                                 showFavorites();
                             }).show();
                 })
@@ -431,6 +455,7 @@ public final class MainActivity extends Activity {
                         ids.addAll(chosen);
                         selected.setText(chosen.isEmpty() ? "Keine Favoriten ausgewählt"
                                 : chosen.size() + " Favoriten für die Uhr ausgewählt");
+                        persistSettings();
                         renderRoom();
                     });
                 });
@@ -479,6 +504,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     catalog = result;
+                    persistSettings();
                     for (Home.Entity entity : result.entities()) {
                         favoriteRooms.put(entity.id(), entity.areaName());
                     }
@@ -727,6 +753,7 @@ public final class MainActivity extends Activity {
                     address = addresses.get(which);
                     watch.setText(descriptions.get(address));
                     scanState.setText("Ausgewählt: " + address);
+                    persistSettings();
                     stopScan.run();
                 })
                 .setNegativeButton("Schließen", (dialog, which) -> stopScan.run())
@@ -810,6 +837,7 @@ public final class MainActivity extends Activity {
         if (address == null || ids.isEmpty()) { toast("Bitte Uhr und Favoriten auswählen."); return; }
         try {
             new Home(url.getText().toString(), token.getText().toString());
+            persistSettings();
             startForegroundService(new Intent(this, BridgeService.class)
                     .putExtra("url", url.getText().toString()).putExtra("token", token.getText().toString())
                     .putExtra("address", address)
