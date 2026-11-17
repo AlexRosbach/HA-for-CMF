@@ -65,7 +65,9 @@ final class WatchPreview extends View {
         if(page.ids[slot].isBlank())return "Belegen";
         if(!page.labels[slot].isBlank())return page.labels[slot];
         Home.Entity e=catalog.get(page.ids[slot]);
-        return e==null?page.ids[slot].substring(page.ids[slot].indexOf('.')+1):e.label();
+        return WatchPages.shortLabel(e==null
+                ?page.ids[slot].substring(page.ids[slot].indexOf('.')+1)
+                :e.label());
     }
     @Override protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
