@@ -156,7 +156,7 @@ final class Home {
         try {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(3500);
-            connection.setReadTimeout(path.equals("/api/conversation/process") ? 35000 : 3500);
+            connection.setReadTimeout(3500);
             connection.setRequestProperty("Authorization", "Bearer " + token);
             if (body != null) {
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
@@ -196,31 +196,6 @@ final class Home {
         var result = new LinkedHashMap<String, Entity>();
         for (Entity entity : entities()) result.put(entity.id(), entity);
         return result;
-    }
-
-    record ConversationReply(String text, String conversationId) {}
-
-    ConversationReply converse(String phrase, String agent, String conversationId) throws Exception {
-        if (phrase == null || phrase.trim().isEmpty()) {
-            throw new IllegalArgumentException("Bitte eine Frage eingeben.");
-        }
-        // Voice and text requests must not unlock doors or disarm security systems.
-        // Home Assistant's own exposed-entity permissions remain the primary security boundary.
-        String normalized = phrase.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.matches(".*(entsperr|entriegel|öffne.{0,30}(tür|tor|schloss)|"
-                + "unlock|disarm|deaktivier.{0,30}alarm|open.{0,30}door).*")) {
-            throw new SecurityException("Sicherheitsaktion: Bitte über die Schlossansicht am Handy bestätigen.");
-        }
-        var body = new JSONObject().put("text", phrase.trim()).put("language", "de");
-        if (agent != null && !agent.isBlank()) body.put("agent_id", agent.trim());
-        if (conversationId != null && !conversationId.isBlank()) body.put("conversation_id", conversationId);
-        var response = new JSONObject(request("/api/conversation/process", body));
-        var speech = response.optJSONObject("response");
-        speech = speech == null ? null : speech.optJSONObject("speech");
-        speech = speech == null ? null : speech.optJSONObject("plain");
-        String answer = speech == null ? "Keine Textantwort erhalten." :
-                speech.optString("speech", "Keine Textantwort erhalten.");
-        return new ConversationReply(answer, response.optString("conversation_id", ""));
     }
 
     void setBrightness(Entity entity, int percent) throws Exception {

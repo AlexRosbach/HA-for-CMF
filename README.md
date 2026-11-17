@@ -1,3 +1,23 @@
+## v0.6.0 – eigene Uhr-Seiten mit Handy-Vorschau (Testversion)
+
+Diese Version ersetzt die starre Raum-Gruppierung durch **selbst gestaltbare Favoritenseiten**. Im Android-Tab **Uhr** befindet sich oben die interaktive Vorschau des 466 × 466 px großen runden CMF-Displays. Jede Vorschauseite hat genau vier Kachelplätze. Du kannst:
+
+- Bis zu **6 Seiten / 24 Kacheln** erstellen, individuell benennen, verschieben oder löschen.
+- Eine Kachel direkt in der Vorschau antippen, eine echte Home-Assistant-Entität per Suche zuweisen, einen kurzen Anzeigetext (bis 10 Zeichen) vergeben oder den Platz leeren.
+- Mit den Pfeilen in der Vorschau blättern. Die Änderungen werden verschlüsselt auf dem Handy gespeichert und von einer laufenden Bridge beim nächsten Statusabruf übernommen.
+- Auf der Uhr mit **links/rechts wischen**, den beiden Pfeilen oder der **Krone** zwischen deinen konfigurierten Seiten wechseln.
+- Unter **SUCHE** auf der Uhr nur noch die vier Kategorien **Lichter, Schalter, Szenen, Sensoren** auswählen und durch Ergebnisse blättern. Es gibt keine Buchstaben-Tastatur mehr.
+
+**Assistent entfernt:** Keine Watch-Assist-Ansicht, keine Voice-Request-Nachrichten und keine Assistant-Einstellungen in Android. Die Home-Assistant-Steuerung und bestätigungspflichtige Schlossaktionen bleiben erhalten.
+
+**Flackern:** Die Uhr zeichnet bei einem unveränderten Status-Paket nicht mehr neu. Sie reagiert erst auf Eingaben oder tatsächlich neue Daten. Lange Namen werden automatisch verkürzt; für exakte Titel gibt es eigene Kurz-Namen pro Kachel.
+
+**Installation:** Android-APK und passende v0.6.0-.wp2app installieren. Im Smartphone **Uhr → Uhr-Oberfläche gestalten** die Seiten konfigurieren, dann **Bridge starten**. Wenn die Bridge bereits läuft, werden Änderungen beim nächsten Abruf übernommen; andernfalls Bridge starten. Eventuell muss die vorherige Test-APK wegen eines neuen CI-Signaturschlüssels zuerst deinstalliert werden.
+
+**Sicherheitsgrenze:** Bei Schlosstasten von der Uhr muss das Handy die Aktion weiterhin explizit bestätigen. Eine Türfalle kann nur über die separat bestätigte Smartphone-Funktion ausgelöst werden.
+
+**Teststatus:** GitHub Actions prüft Android- und Rust-Builds; ob Swipe, Krone, Touch und BLE-Verbindung auf der echten CMF Watch Pro 2 wie erwartet reagieren, muss mit Hardware getestet werden. v0.6.0 bleibt daher ein Prerelease.
+
 # HA for CMF
 
 Show up to four Home Assistant entities on a CMF Watch Pro 2. Tap a light or switch to turn it on or off. Scenes, scripts, and button entities can be triggered as one-tap actions. Other entities are read-only and can display a state and unit, such as temperature or humidity.
