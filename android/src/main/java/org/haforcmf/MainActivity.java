@@ -347,6 +347,9 @@ public final class MainActivity extends Activity {
                 boolean unlock = entity.state().equals("locked");
                 button(row, unlock ? "Schloss entsperren …" : "Schloss verriegeln …",
                         () -> confirmLock(entity, unlock));
+                if (entity.supportsOpen()) {
+                    button(row, "Tür öffnen (Schnapper) …", () -> confirmLatch(entity));
+                }
             } else if (entity.canSwitch()) {
                 boolean on = entity.actionable() || !entity.state().equals("on");
                 button(row, entity.actionable() ? "Ausführen" : on ? "Einschalten" : "Ausschalten",
@@ -383,6 +386,39 @@ public final class MainActivity extends Activity {
                 .setPositiveButton(unlock ? "Ja, entsperren" : "Ja, verriegeln",
                         (dialog, which) -> runLockAction(entity, unlock))
                 .show();
+    }
+
+    private void confirmLatch(Home.Entity entity) {
+        new AlertDialog.Builder(this)
+                .setTitle("Tür wirklich öffnen?")
+                .setMessage("Raum: " + entity.areaName() + "\nSchloss: " + entity.label()
+                        + "\n\nDas Türschloss gibt die Falle frei. Die Tür kann danach"
+                        + " unter Umständen sofort geöffnet werden.")
+                .setNegativeButton("Abbrechen", null)
+                .setPositiveButton("Ja, Tür öffnen", (dialog, which) -> runLatchAction(entity))
+                .show();
+    }
+
+    private void runLatchAction(Home.Entity entity) {
+        final Home home;
+        try {
+            home = new Home(url.getText().toString(), token.getText().toString());
+        } catch (Exception ex) {
+            toast("Home Assistant Zugangsdaten fehlen.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                home.openLatch(entity.id());
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    toast("Türöffner ausgelöst: " + entity.label());
+                    refreshQuickActions();
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> toast("Tür konnte nicht geöffnet werden: " + ex.getMessage()));
+            }
+        }, "Confirmed door unlatch").start();
     }
 
     private void runLockAction(Home.Entity entity, boolean unlock) {
