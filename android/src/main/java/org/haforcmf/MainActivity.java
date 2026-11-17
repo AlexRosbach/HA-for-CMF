@@ -23,6 +23,8 @@ import android.view.View;
 import android.widget.*;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 
@@ -40,6 +42,12 @@ public final class MainActivity extends Activity {
     private static final int SURFACE = Color.rgb(247, 248, 250);
     private LinearLayout content;
     private LinearLayout quickActions;
+    private Spinner roomPicker;
+    private Home.Catalog catalog;
+    private String chosenRoomId = "";
+    private final Map<String,String> favoriteRooms = new HashMap<>();
+    private final List<String> roomOptions = new ArrayList<>();
+    private final List<String> roomOptionIds = new ArrayList<>();
     private TextView scanState;
 
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
@@ -116,16 +124,38 @@ public final class MainActivity extends Activity {
         token = input(homeCard, "Access token", "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         token.setSaveEnabled(false);
-        button(homeCard, "Geräte auswählen (max. 4)", this::chooseEntities);
+        button(homeCard, "Favoriten für die Uhr auswählen", this::chooseEntities);
         selected = text(homeCard, "Noch keine Geräte ausgewählt");
         selected.setTextColor(MUTED);
-        heading(content, "Schnellsteuerung", "Ausgewählte Geräte direkt auf dem Handy steuern.");
+        heading(content, "Räume & Geräte", "Wähle einen Raum und steuere Licht, Szenen oder Schlösser direkt.");
         var quickCard = card(content);
-        button(quickCard, "Status aktualisieren", this::refreshQuickActions);
+        var pickTitle = text(quickCard, "RAUM");
+        pickTitle.setTextSize(12);
+        pickTitle.setTextColor(MUTED);
+        roomPicker = new Spinner(this);
+        roomOptions.add("Alle Räume");
+        roomOptionIds.add("");
+        var options = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, roomOptions);
+        roomPicker.setAdapter(options);
+        quickCard.addView(roomPicker);
+        roomPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view,
+                    int position, long id) {
+                if (position < roomOptionIds.size()) {
+                    String next = roomOptionIds.get(position);
+                    if (!next.equals(chosenRoomId)) {
+                        chosenRoomId = next;
+                        renderRoom();
+                    }
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        button(quickCard, "Räume und Geräte aktualisieren", this::refreshQuickActions);
         quickActions = new LinearLayout(this);
         quickActions.setOrientation(LinearLayout.VERTICAL);
         quickCard.addView(quickActions);
-        text(quickActions, "Bitte zuerst Home-Assistant-Geräte auswählen.");
+        text(quickActions, "Verbinde Home Assistant und lade die Räume.");
 
         heading(content, "Uhr-App & Verbindung", "Für die Installation wird WP2 Apps mit Loader auf der Uhr benötigt.");
         var actions = card(content);
@@ -155,6 +185,7 @@ public final class MainActivity extends Activity {
         var view = new TextView(this);
         view.setText(value);
         view.setTextSize(16);
+        view.setTextColor(TEXT);
         parent.addView(view);
         return view;
     }
@@ -165,6 +196,8 @@ public final class MainActivity extends Activity {
         field.setSingleLine(true);
         field.setInputType(type);
         field.setText(value);
+        field.setTextColor(TEXT);
+        field.setHintTextColor(MUTED);
         parent.addView(field);
         return field;
     }
@@ -187,107 +220,82 @@ public final class MainActivity extends Activity {
     private void toast(String value) { Toast.makeText(this, value, Toast.LENGTH_LONG).show(); }
 
     private void chooseEntities() {
+        final Home home;
         try {
-            var home = new Home(url.getText().toString(), token.getText().toString());
-            toast("Loading entities…");
-            new Thread(() -> {
-                try {
-                    var entries = home.entities();
-                    runOnUiThread(() -> { if (!isDestroyed()) picker(entries); });
-                } catch (Exception ex) {
-                    runOnUiThread(() -> toast("Could not load entities. Check URL and access token."));
-                }
-            }, "Load entities").start();
-        } catch (IllegalArgumentException ex) {
-            toast(ex.getMessage());
+            home = new Home(url.getText().toString(), token.getText().toString());
+        } catch (Exception ex) {
+            toast("Bitte gültige Home-Assistant-URL und Token eingeben.");
+            return;
         }
+        toast("Lade Entitäten und Räume …");
+        new Thread(() -> {
+            try {
+                Home.Catalog result = home.catalog();
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    catalog = result;
+                    updateRoomPicker();
+                    for (Home.Entity entity : result.entities()) {
+                        favoriteRooms.put(entity.id(), entity.areaName());
+                    }
+                    EntityBrowser.show(this, result, ids, chosen -> {
+                        ids.clear();
+                        ids.addAll(chosen);
+                        selected.setText(chosen.isEmpty() ? "Keine Favoriten ausgewählt"
+                                : chosen.size() + " Favoriten für die Uhr ausgewählt");
+                        renderRoom();
+                    });
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> toast("Entitäten konnten nicht geladen werden: " + ex.getMessage()));
+            }
+        }, "Load entity browser").start();
     }
 
-    private void picker(List<Home.Entity> entries) {
-        var checked = new ArrayList<>(ids);
-        var panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        var query = new EditText(this);
-        query.setHint("Search name or entity ID");
-        panel.addView(query);
-        var list = new ListView(this);
-        list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
-        panel.addView(list, new LinearLayout.LayoutParams(-1, Math.round(350 * getResources().getDisplayMetrics().density)));
-        List<Home.Entity> visible = new ArrayList<>();
-        Runnable filter = () -> {
-            visible.clear();
-            String q = query.getText().toString().toLowerCase(Locale.ROOT);
-            for (var entry : entries) if ((entry.label() + " " + entry.id()).toLowerCase(Locale.ROOT).contains(q)) visible.add(entry);
-            String[] labels = visible.stream().map(e -> e.label() + " · " + e.id()).toArray(String[]::new);
-            list.clearChoices();
-            list.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_multiple_choice, labels));
-            for (int i = 0; i < visible.size(); i++) list.setItemChecked(i, checked.contains(visible.get(i).id()));
-        };
-        query.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) { filter.run(); }
-            public void afterTextChanged(Editable e) {}
-        });
-        list.setOnItemClickListener((parent, view, position, row) -> {
-            String id = visible.get(position).id();
-            if (checked.remove(id)) return;
-            if (checked.size() == 4) {
-                list.setItemChecked(position, false);
-                toast("Choose at most four entities.");
-            } else {
-                checked.add(id);
-            }
-        });
-        filter.run();
-        new AlertDialog.Builder(this).setTitle("Select up to four entities").setView(panel)
-                .setNegativeButton("Cancel", null).setPositiveButton("Apply", (dialog, which) -> {
-                    ids.clear();
-                    ids.addAll(checked);
-                    selected.setText(ids.isEmpty() ? "Keine Geräte ausgewählt" : String.join("\n", ids));
-                    refreshQuickActions();
-                }).show();
+    private void updateRoomPicker() {
+        if (catalog == null || roomPicker == null) return;
+        roomOptions.clear();
+        roomOptionIds.clear();
+        roomOptions.add("Alle Räume");
+        roomOptionIds.add("");
+        for (Home.Room room : catalog.rooms()) {
+            roomOptions.add(room.name());
+            roomOptionIds.add(room.id());
+        }
+        roomOptions.add("Ohne Raum");
+        roomOptionIds.add("no_room");
+        ((ArrayAdapter<?>) roomPicker.getAdapter()).notifyDataSetChanged();
+        int selectedIndex = roomOptionIds.indexOf(chosenRoomId);
+        if (selectedIndex < 0) {
+            chosenRoomId = "";
+            selectedIndex = 0;
+        }
+        roomPicker.setSelection(selectedIndex);
     }
 
     private void refreshQuickActions() {
         if (quickActions == null) return;
         quickActions.removeAllViews();
-        if (ids.isEmpty()) {
-            text(quickActions, "Keine Geräte ausgewählt.");
-            return;
-        }
+        text(quickActions, "Lade Räume und Geräte …");
         final Home home;
         try {
             home = new Home(url.getText().toString(), token.getText().toString());
         } catch (IllegalArgumentException ex) {
+            quickActions.removeAllViews();
             text(quickActions, "Bitte zuerst URL und Token eingeben.");
             return;
         }
-        text(quickActions, "Aktualisiere Status …");
         new Thread(() -> {
             try {
-                var states = home.states();
+                Home.Catalog result = home.catalog();
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
-                    quickActions.removeAllViews();
-                    for (String id : ids) {
-                        Home.Entity entity = states.get(id);
-                        if (entity == null) {
-                            text(quickActions, id + " · Nicht verfügbar");
-                            continue;
-                        }
-                        var row = card(quickActions);
-                        var title = text(row, entity.label());
-                        title.setTextColor(TEXT);
-                        title.setTypeface(null, Typeface.BOLD);
-                        var value = text(row, entity.display() + "  ·  " + id);
-                        value.setTextColor(MUTED);
-                        value.setTextSize(13);
-                        if (entity.canSwitch()) {
-                            boolean on = entity.actionable() || !"on".equals(entity.state());
-                            button(row, entity.actionable() ? "Ausführen" : (on ? "Einschalten" : "Ausschalten"),
-                                    () -> runQuickAction(entity, on));
-                        }
+                    catalog = result;
+                    for (Home.Entity entity : result.entities()) {
+                        favoriteRooms.put(entity.id(), entity.areaName());
                     }
+                    updateRoomPicker();
+                    renderRoom();
                 });
             } catch (Exception ex) {
                 runOnUiThread(() -> {
@@ -296,7 +304,107 @@ public final class MainActivity extends Activity {
                     text(quickActions, "Home Assistant nicht erreichbar: " + ex.getMessage());
                 });
             }
-        }, "Load quick actions").start();
+        }, "Refresh rooms").start();
+    }
+
+    private void renderRoom() {
+        if (quickActions == null) return;
+        quickActions.removeAllViews();
+        if (catalog == null) {
+            text(quickActions, "Räume laden, um Geräte anzuzeigen.");
+            return;
+        }
+        ArrayList<Home.Entity> items = new ArrayList<>();
+        for (Home.Entity entity : catalog.entities()) {
+            boolean roomMatch = chosenRoomId.isEmpty()
+                    || (chosenRoomId.equals("no_room") && entity.areaId().isEmpty())
+                    || chosenRoomId.equals(entity.areaId());
+            if (!roomMatch) continue;
+            if (!chosenRoomId.isEmpty() || ids.contains(entity.id())) items.add(entity);
+        }
+        if (chosenRoomId.isEmpty() && items.isEmpty()) {
+            text(quickActions, "Wähle einen Raum aus, oder füge Favoriten über den Entitäten-Browser hinzu.");
+            return;
+        }
+        items.sort((a,b) -> {
+            if (a.controllable() != b.controllable()) return a.controllable() ? -1 : 1;
+            return a.label().compareToIgnoreCase(b.label());
+        });
+        TextView count = text(quickActions, items.size() + " Entitäten");
+        count.setTextColor(MUTED);
+        count.setTextSize(12);
+        int limit = Math.min(items.size(), 30);
+        for (int i = 0; i < limit; i++) {
+            Home.Entity entity = items.get(i);
+            var row = card(quickActions);
+            TextView label = text(row, iconFor(entity) + "  " + entity.label());
+            label.setTextSize(17);
+            label.setTypeface(null, Typeface.BOLD);
+            TextView detail = text(row, entity.areaName() + " · " + entity.display());
+            detail.setTextSize(13);
+            detail.setTextColor(MUTED);
+            if (entity.isLock() && entity.controllable()) {
+                boolean unlock = entity.state().equals("locked");
+                button(row, unlock ? "Schloss entsperren …" : "Schloss verriegeln …",
+                        () -> confirmLock(entity, unlock));
+            } else if (entity.canSwitch()) {
+                boolean on = entity.actionable() || !entity.state().equals("on");
+                button(row, entity.actionable() ? "Ausführen" : on ? "Einschalten" : "Ausschalten",
+                        () -> runQuickAction(entity, on));
+            }
+        }
+        if (items.size() > limit) {
+            TextView hint = text(quickActions, "Weitere " + (items.size() - limit)
+                    + " Geräte: Filtere im Entitäten-Browser oder wähle einen anderen Raum.");
+            hint.setTextColor(MUTED);
+            hint.setTextSize(13);
+        }
+    }
+
+    private String iconFor(Home.Entity entity) {
+        return switch (entity.domain()) {
+            case "light" -> "☀";
+            case "switch" -> "⏻";
+            case "lock" -> "⌑";
+            case "scene" -> "◈";
+            case "script" -> "▶";
+            case "sensor", "binary_sensor" -> "◉";
+            default -> "◇";
+        };
+    }
+
+    private void confirmLock(Home.Entity entity, boolean unlock) {
+        String action = unlock ? "ENTSPERREN" : "VERRIEGELN";
+        new AlertDialog.Builder(this)
+                .setTitle("Schloss " + (unlock ? "entsperren" : "verriegeln") + "?")
+                .setMessage("Raum: " + entity.areaName() + "\nSchloss: " + entity.label()
+                        + "\n\nSoll dieses Schloss wirklich " + action + " werden?")
+                .setNegativeButton("Abbrechen", null)
+                .setPositiveButton(unlock ? "Ja, entsperren" : "Ja, verriegeln",
+                        (dialog, which) -> runLockAction(entity, unlock))
+                .show();
+    }
+
+    private void runLockAction(Home.Entity entity, boolean unlock) {
+        final Home home;
+        try {
+            home = new Home(url.getText().toString(), token.getText().toString());
+        } catch (Exception ex) {
+            toast("Home Assistant Zugangsdaten fehlen.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                home.setLock(entity.id(), unlock);
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    toast("Schlossaktion gesendet: " + entity.label());
+                    refreshQuickActions();
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> toast("Schlossaktion fehlgeschlagen: " + ex.getMessage()));
+            }
+        }, "Confirmed lock action").start();
     }
 
     private void runQuickAction(Home.Entity entity, boolean on) {
@@ -439,13 +547,16 @@ public final class MainActivity extends Activity {
 
     private void startBridge() {
         if (!bluetoothAllowed()) return;
-        if (address == null || ids.isEmpty()) { toast("Choose entities and a watch first."); return; }
+        if (address == null || ids.isEmpty()) { toast("Bitte Uhr und Favoriten auswählen."); return; }
         try {
             new Home(url.getText().toString(), token.getText().toString());
             startForegroundService(new Intent(this, BridgeService.class)
                     .putExtra("url", url.getText().toString()).putExtra("token", token.getText().toString())
                     .putExtra("address", address)
-                    .putExtra("entities", ids.toArray(String[]::new)));
+                    .putExtra("entities", ids.toArray(String[]::new))
+                    .putExtra("rooms", ids.stream()
+                            .map(id -> favoriteRooms.getOrDefault(id, "Favoriten"))
+                            .toArray(String[]::new)));
         } catch (IllegalArgumentException ex) {
             toast(ex.getMessage());
         }
