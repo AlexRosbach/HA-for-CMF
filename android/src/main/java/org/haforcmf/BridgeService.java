@@ -97,6 +97,10 @@ public final class BridgeService extends Service {
             groups.computeIfAbsent(name, key -> new ArrayList<>()).add(ids.get(i));
         }
         var pages = new ArrayList<Page>();
+        if (ids.isEmpty()) {
+            // Show an honest connected but empty state on the watch.
+            pages.add(new Page("Favoriten", List.of()));
+        }
         for (var group : groups.entrySet()) {
             var members = group.getValue();
             for (int start = 0; start < members.size(); start += 4) {
@@ -196,7 +200,7 @@ public final class BridgeService extends Service {
             currentUrl=intent.getStringExtra("url");
             currentToken=intent.getStringExtra("token");
             var ids = List.of(intent.getStringArrayExtra("entities"));
-            if (ids.isEmpty() || ids.size() > 24) throw new IllegalArgumentException("Choose one to 24 entities");
+            if (ids.size() > 24) throw new IllegalArgumentException("Maximum 24 entities");
             var pages = pagesFor(ids, intent.getStringArrayExtra("rooms"));
             Home.Catalog catalog=home.catalog();
             boolean searching=false;

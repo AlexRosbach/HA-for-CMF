@@ -89,7 +89,19 @@ public final class MainActivity extends Activity {
 
         var root = UiKit.column(this);
         root.setBackgroundColor(UiKit.BG);
+        // Android 15+ enforces edge-to-edge for target 35. Respect the real system
+        // status/navigation bars instead of drawing the header under the clock.
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets safe = insets.getInsets(
+                        android.view.WindowInsets.Type.systemBars()
+                        | android.view.WindowInsets.Type.displayCutout());
+                root.setPadding(0, safe.top, 0, safe.bottom);
+                return insets;
+            });
+        }
         setContentView(root);
+        root.requestApplyInsets();
 
         var top = UiKit.row(this);
         top.setPadding(dp(20),dp(12),dp(20),dp(8));
@@ -899,7 +911,7 @@ public final class MainActivity extends Activity {
 
     private void startBridge() {
         if (!bluetoothAllowed()) return;
-        if (address == null || ids.isEmpty()) { toast("Bitte Uhr und Favoriten auswählen."); return; }
+        if (address == null) { toast("Bitte zuerst die Uhr auswählen."); return; }
         try {
             new Home(url.getText().toString(), token.getText().toString());
             persistSettings();

@@ -125,12 +125,24 @@ final class EntityBrowser {
         root.addView(list,new LinearLayout.LayoutParams(-1,0,1));
 
         final Button[] saveButton={null};
+        final Runnable[] refresh={null};
+        java.util.function.Consumer<Home.Entity> toggle = entity -> {
+            if (!chosen.remove(entity.id())) {
+                if (chosen.size() >= MAX_SELECTION) {
+                    Toast.makeText(a,"Maximal 24 Favoriten möglich.",Toast.LENGTH_LONG).show();
+                    return;
+                }
+                chosen.add(entity.id());
+            }
+            if (refresh[0] != null) refresh[0].run();
+        };
         ArrayAdapter<Home.Entity> adapter=new ArrayAdapter<>(a,0,results){
             @Override public View getView(int position,View recycled,ViewGroup parent){
                 Home.Entity e=getItem(position);
                 LinearLayout card=UiKit.row(a);
                 card.setPadding(UiKit.dp(a,12),UiKit.dp(a,10),UiKit.dp(a,12),UiKit.dp(a,10));
-                card.setBackground(UiKit.bg(a,Color.WHITE,17,UiKit.EDGE));
+                card.setBackground(UiKit.bg(a,
+                        chosen.contains(e.id()) ? UiKit.PEACH : Color.WHITE,17,UiKit.EDGE));
                 LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(
                         UiKit.dp(a,35),UiKit.dp(a,50));
                 TextView icon=UiKit.label(a,symbol(e),25,true,UiKit.ORANGE);
@@ -148,9 +160,19 @@ final class EntityBrowser {
                 CheckBox choice=new CheckBox(a);
                 choice.setButtonTintList(ColorStateList.valueOf(UiKit.ORANGE));
                 choice.setChecked(chosen.contains(e.id()));
-                choice.setClickable(false);
+                // A disabled click target with a still-focusable CheckBox swallowed taps
+                // inside a ListView. Both checkbox and whole card now toggle the same entity.
+                choice.setFocusable(false);
+                choice.setFocusableInTouchMode(false);
+                choice.setClickable(true);
+                choice.setContentDescription("Favorit " + e.label()
+                        + (chosen.contains(e.id()) ? " entfernen" : " hinzufügen"));
+                choice.setOnClickListener(v -> toggle.accept(e));
                 card.addView(choice,new LinearLayout.LayoutParams(
                         UiKit.dp(a,45),UiKit.dp(a,55)));
+                card.setClickable(true);
+                card.setFocusable(false);
+                card.setOnClickListener(v -> toggle.accept(e));
                 LinearLayout outer=UiKit.column(a);
                 outer.setPadding(0,UiKit.dp(a,4),0,UiKit.dp(a,4));
                 outer.addView(card);
@@ -185,16 +207,9 @@ final class EntityBrowser {
             if(saveButton[0]!=null)saveButton[0].setText("✓  "+chosen.size()+"/24 Favoriten speichern");
             adapter.notifyDataSetChanged();
         };
+        refresh[0]=update;
         list.setOnItemClickListener((parent,view,index,id)->{
-            Home.Entity e=results.get(index);
-            if(!chosen.remove(e.id())){
-                if(chosen.size()>=MAX_SELECTION){
-                    Toast.makeText(a,"Maximal 24 Favoriten möglich.",Toast.LENGTH_LONG).show();
-                    return;
-                }
-                chosen.add(e.id());
-            }
-            update.run();
+            toggle.accept(results.get(index));
         });
         roomButton.setOnClickListener(v->new AlertDialog.Builder(a)
                 .setTitle("Raum auswählen")
