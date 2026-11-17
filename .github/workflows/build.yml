@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -57,3 +57,18 @@ jobs:
             android/.build/ha-for-cmf-android.apk
             .build/ha-for-cmf.wp2app
           if-no-files-found: error
+      - name: Publish GitHub Release v0.3.0
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            echo "Release v0.3.0 already exists"
+            exit 0
+          fi
+          gh release create v0.3.0 \
+            android/.build/ha-for-cmf-android.apk \
+            .build/ha-for-cmf.wp2app \
+            --target "$GITHUB_SHA" \
+            --title "HA for CMF v0.3.0" \
+            --notes "Android pairing UI redesign, broader BLE discovery, Home Assistant quick actions, refreshed CMF Watch Pro 2 tiles. Experimental release: WP2 Apps loader required on watch; Bluetooth pairing on physical hardware not yet verified. Android APK uses a CI-generated test signing key."
