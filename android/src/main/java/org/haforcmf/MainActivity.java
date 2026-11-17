@@ -243,7 +243,8 @@ public final class MainActivity extends Activity {
                 .setNegativeButton("Cancel", null).setPositiveButton("Apply", (dialog, which) -> {
                     ids.clear();
                     ids.addAll(checked);
-                    selected.setText(ids.isEmpty() ? "No entities selected" : String.join("\n", ids));
+                    selected.setText(ids.isEmpty() ? "Keine Geräte ausgewählt" : String.join("\n", ids));
+                    refreshQuickActions();
                 }).show();
     }
 
