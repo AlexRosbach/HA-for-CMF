@@ -195,6 +195,31 @@ final class Home {
         return result;
     }
 
+    record ConversationReply(String text, String conversationId) {}
+
+    ConversationReply converse(String phrase, String agent, String conversationId) throws Exception {
+        if (phrase == null || phrase.trim().isEmpty()) {
+            throw new IllegalArgumentException("Bitte eine Frage eingeben.");
+        }
+        // Voice and text requests must not unlock doors or disarm security systems.
+        // Home Assistant's own exposed-entity permissions remain the primary security boundary.
+        String normalized = phrase.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.matches(".*(entsperr|entriegel|öffne.{0,30}(tür|tor|schloss)|"
+                + "unlock|disarm|deaktivier.{0,30}alarm|open.{0,30}door).*")) {
+            throw new SecurityException("Sicherheitsaktion: Bitte über die Schlossansicht am Handy bestätigen.");
+        }
+        var body = new JSONObject().put("text", phrase.trim()).put("language", "de");
+        if (agent != null && !agent.isBlank()) body.put("agent_id", agent.trim());
+        if (conversationId != null && !conversationId.isBlank()) body.put("conversation_id", conversationId);
+        var response = new JSONObject(request("/api/conversation/process", body));
+        var speech = response.optJSONObject("response");
+        speech = speech == null ? null : speech.optJSONObject("speech");
+        speech = speech == null ? null : speech.optJSONObject("plain");
+        String answer = speech == null ? "Keine Textantwort erhalten." :
+                speech.optString("speech", "Keine Textantwort erhalten.");
+        return new ConversationReply(answer, response.optString("conversation_id", ""));
+    }
+
     void set(Entity entity, boolean on) throws Exception {
         String domain = entity.id().substring(0, entity.id().indexOf('.'));
         if (entity.actionable()) {
