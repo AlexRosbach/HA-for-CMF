@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -57,19 +57,32 @@ jobs:
             android/.build/ha-for-cmf-android.apk
             .build/ha-for-cmf.wp2app
           if-no-files-found: error
-      - name: Publish GitHub Release v0.6.0
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  release:
+    name: Publish experimental release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ha-for-cmf-ci-packages
+          path: dist
+      - name: Publish GitHub Release v0.7.0
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.6.0 >/dev/null 2>&1; then
-            echo "Release v0.6.0 already exists"
+          if gh release view v0.7.0 >/dev/null 2>&1; then
+            echo "Release v0.7.0 already exists"
             exit 0
           fi
-          gh release create v0.6.0 \
-            android/.build/ha-for-cmf-android.apk \
-            .build/ha-for-cmf.wp2app \
+          sha256sum dist/ha-for-cmf-android.apk dist/ha-for-cmf.wp2app > dist/SHA256SUMS
+          gh release create v0.7.0 \
+            dist/ha-for-cmf-android.apk \
+            dist/ha-for-cmf.wp2app \
+            dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
-            --title "HA for CMF v0.6.0 – Custom Watch Pages" \
+            --title "HA for CMF v0.7.0 – English, German, Light & Dark" \
             --prerelease \
-            --notes "Custom watch pages with up to six named pages and four editable tiles each, interactive watch preview and slot/alias editor on Android. Swipe, crown or arrow navigation on the watch. Simplified non-keyboard search by device type; Voice Assistant removed from Android and watch. Reduced flicker by suppressing identical full-screen redraws. Requires matching Android and WP2 watch app. Prerelease: actual hardware behavior still needs device testing. APK signed with temporary CI key."
+            --notes "English and German in-app language selection, System/Light/Dark display modes on phone and watch, improved project documentation inspired by LanLens, setup/privacy/security guides, public issue templates and checksum downloads. This remains an experimental prerelease. Phone and watch packages must match; APK uses a disposable CI signing key and may require uninstalling the previous version."
