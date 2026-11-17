@@ -37,12 +37,13 @@ jobs:
           keytool -genkeypair -keystore "$RUNNER_TEMP/ci-test.jks" -alias ci -keyalg RSA -keysize 2048 -validity 3650 -storepass android -keypass android -dname "CN=CI Test, O=HA for CMF"
       - name: Build and verify Android APK
         env:
-          ANDROID_JAR: ${{ env.ANDROID_HOME }}/platforms/android-35/android.jar
-          ANDROID_BUILD_TOOLS: ${{ env.ANDROID_HOME }}/build-tools/35.0.0
           APK_KEYSTORE: ${{ runner.temp }}/ci-test.jks
           APK_KEY_ALIAS: ci
           APK_KEYSTORE_PASSWORD: android
-        run: bash android/build.sh
+        run: |
+          export ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
+          export ANDROID_BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          bash android/build.sh
       - name: Archive installable test APK and watch package
         uses: actions/upload-artifact@v4
         with:
