@@ -1,24 +1,18 @@
 # Screenshot standards for public documentation
 
-## Current screenshot status
+## Public gallery
 
-The repository already contains `docs/four-entities.png` (older emulator example) and `docs/watch-mockups.png` (earlier concept design). They are **not** proof of the current v0.7 UI or real-device compatibility.
+The public README embeds [readme-ui-redacted.jpg](screenshots/readme-ui-redacted.jpg). It is a **montage derived from actual v0.6 Android screenshots**, not a render or screenshot of the v0.7 language/theme release. The source screenshots were provided during real-device troubleshooting.
 
-**Fresh screenshots have not yet been added.** Images supplied during private troubleshooting must be reviewed and sanitized before publication. Avoid presenting mockups as real device captures.
+Changes applied before publication:
+- Cropped away the phone status bar, notifications and the song/media title.
+- Replaced all visible Home Assistant entity IDs with dummy IDs, for example `light.living_room_ceiling`.
+- Replaced the Bluetooth device MAC with `XX:XX:XX:XX:XX:XX`.
+- Changed room/device names where they may reveal household details.
+- No real Home Assistant domain, access token or password is included.
+- Exported through Pillow without EXIF metadata.
 
-## Screenshots needed for the public README
-
-| Suggested file | Content | Notes |
-|---|---|---|
-| `docs/screenshots/android-home-light.png` | Home and rooms | Sample names only |
-| `docs/screenshots/android-home-dark.png` | Dark-mode dashboard | Same demo setup |
-| `docs/screenshots/android-entities-en.png` | English entity browser | Synthetic entities and areas |
-| `docs/screenshots/android-watch-editor.png` | Interactive watch preview | Non-sensitive sample tiles |
-| `docs/screenshots/android-settings.png` | Language/appearance selectors | Token field hidden; preferably use demo URL |
-| `docs/screenshots/watch-light.jpg` | Real watch with light UI | Round display clearly visible |
-| `docs/screenshots/watch-dark.jpg` | Real watch with dark UI | Round display clearly visible |
-
-These paths are **planned filenames**, not currently published image files. Do **not** add references to nonexistent paths in the README. Once sanitized files are committed, update the screenshot gallery.
+This gallery is for showing **real UI navigation and styling**, not verifying actual Bluetooth compatibility. For a future v0.7 gallery, capture additional light, dark, German and English screens with **demo entities**. An old watch photo showing the removed Voice Assistant and the old blue mockups **must not** appear as current release imagery.
 
 ## Redaction rules
 
