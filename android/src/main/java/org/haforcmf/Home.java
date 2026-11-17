@@ -123,7 +123,7 @@ final class Home {
     // Physical unlatching is deliberately separate from unlock and never sent
     // through the watch toggle protocol.
     void openLatch(String entityId) throws Exception {
-        if (!entityId.matches("lock\\\\.[a-z0-9_]+")) {
+        if (!entityId.matches("lock\\.[a-z0-9_]+")) {
             throw new IllegalArgumentException("Keine gültige Schloss-Entität.");
         }
         Entity current = states().get(entityId);
