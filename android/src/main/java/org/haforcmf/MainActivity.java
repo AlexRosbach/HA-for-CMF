@@ -232,6 +232,32 @@ public final class MainActivity extends Activity {
         var voiceCard=card(settingsPage);
         agentInput=UiKit.field(this,voiceCard,"Home Assistant Agent-ID (optional)",
                 "Leer = Standardassistent",SettingsStore.load(this,"agent"),InputType.TYPE_CLASS_TEXT);
+        TextView selectionTitle=UiKit.label(this,"ASSISTENT WÄHLEN",13,true,UiKit.INK);
+        voiceCard.addView(selectionTitle);
+        Spinner agentPreset=new Spinner(this);
+        String[] assistants={"Home Assistant Assist (Standard)",
+                "Home Assistant integrierter Agent",
+                "OpenAI / anderer Agent über Home Assistant"};
+        var presetAdapter=new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_dropdown_item,assistants){
+            @Override public View getView(int position,View recycled,android.view.ViewGroup parent){
+                TextView view=(TextView)super.getView(position,recycled,parent);
+                view.setTextColor(UiKit.INK);
+                return view;
+            }
+        };
+        agentPreset.setAdapter(presetAdapter);
+        voiceCard.addView(agentPreset,new LinearLayout.LayoutParams(-1,dp(54)));
+        String initialAgent=agentInput.getText().toString();
+        agentPreset.setSelection(initialAgent.isBlank()?0:
+                initialAgent.equals("conversation.home_assistant")?1:2);
+        agentPreset.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
+                if(position==0)agentInput.setText("");
+                else if(position==1)agentInput.setText("conversation.home_assistant");
+            }
+            public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
         var agentHint=text(voiceCard,"Beispiel: conversation.home_assistant. "
                 +"Andere Agenten müssen in Home Assistant eingerichtet sein.");
         agentHint.setTextColor(UiKit.MUTED);agentHint.setTextSize(13);
@@ -269,6 +295,10 @@ public final class MainActivity extends Activity {
             tabLabels[i]=t;
         }
         showTab(0);
+        if(android.os.Build.VERSION.SDK_INT>=33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1002);
+        }
         handleWatchIntent(getIntent());
     }
 
@@ -399,6 +429,7 @@ public final class MainActivity extends Activity {
 
     private void askAssistant(String phrase){
         if(voiceResult==null)return;
+        persistSettings();
         final Home home;
         try{home=new Home(url.getText().toString(),token.getText().toString());}
         catch(Exception ex){voiceResult.setText("Bitte zuerst Home Assistant verbinden.");return;}
