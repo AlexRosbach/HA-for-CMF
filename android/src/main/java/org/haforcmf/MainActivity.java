@@ -133,7 +133,7 @@ public final class MainActivity extends Activity {
         areaLabel.setTextSize(12);areaLabel.setTextColor(UiKit.MUTED);
         roomPicker=new Spinner(this);
         roomPicker.setBackground(UiKit.bg(this,UiKit.CARD,12,UiKit.EDGE));
-        roomOptions.add("Alle Räume");
+        roomOptions.add(LocaleKit.t(this,"Alle Räume"));
         roomOptionIds.add("");
         var roomsAdapter=new ArrayAdapter<String>(this,
                 android.R.layout.simple_spinner_dropdown_item,roomOptions) {
@@ -187,7 +187,9 @@ public final class MainActivity extends Activity {
                 changed.save(MainActivity.this);
                 ids.clear();
                 ids.addAll(changed.uniqueEntities());
-                selected.setText(ids.size()+" Favoriten auf "+changed.pages.size()+" Seiten");
+                selected.setText(LocaleKit.english(MainActivity.this)
+                        ? ids.size()+" favourites on "+changed.pages.size()+" pages"
+                        : ids.size()+" Favoriten auf "+changed.pages.size()+" Seiten");
                 persistSettings();
                 BridgeService.notifyPagesChanged();
             }
@@ -254,6 +256,7 @@ public final class MainActivity extends Activity {
                     View view,int position,long id){
                 String next=position==1?"en":"de";
                 if(!next.equals(SettingsStore.load(MainActivity.this,"language"))){
+                    persistSettings();
                     SettingsStore.save(MainActivity.this,"language",next);
                     BridgeService.notifyPagesChanged();
                     recreate();
@@ -287,6 +290,7 @@ public final class MainActivity extends Activity {
                 String previous=SettingsStore.load(MainActivity.this,"theme");
                 if(previous.isBlank())previous="system";
                 if(!next.equals(previous)){
+                    persistSettings();
                     SettingsStore.save(MainActivity.this,"theme",next);
                     BridgeService.notifyPagesChanged();
                     recreate();
@@ -525,7 +529,7 @@ public final class MainActivity extends Activity {
             roomOptions.add(room.name());
             roomOptionIds.add(room.id());
         }
-        roomOptions.add("Ohne Raum");
+        roomOptions.add(LocaleKit.t(this,"Ohne Raum"));
         roomOptionIds.add("no_room");
         ((ArrayAdapter<?>) roomPicker.getAdapter()).notifyDataSetChanged();
         int selectedIndex = roomOptionIds.indexOf(chosenRoomId);
