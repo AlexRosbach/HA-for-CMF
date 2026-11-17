@@ -31,13 +31,13 @@ HA for CMF ist ein **experimentelles Open-Source-Projekt** aus einer Android-App
 
 Weitere Einzelheiten: [Installation](docs/INSTALLATION.md), [Fehlerbehebung](docs/TROUBLESHOOTING.md), [Sprache und Design](docs/CONFIGURATION.md).
 
-## Screenshots
+## Screenshots – Original-App, anonymisiert
 
-| Ältere Emulatoraufnahme | Früherer UI-Entwurf |
-|---|---|
-| ![Frühere Uhrenkacheln](docs/four-entities.png) | ![UI-Konzept, kein aktueller Gerätescreenshot](docs/watch-mockups.png) |
+![Bereinigte echte Android-Screenshots mit Raumsteuerung, Entitäten-Browser, Uhr-Vorschau und Bluetooth-Bridge](docs/screenshots/readme-ui-redacted.jpg)
 
-Das sind **Referenzbilder**, keine verifizierten Aufnahmen des aktuellen v0.7-Stands. Neue, datenschutzbereinigte Hell-/Dunkel-Screenshots sind vorgesehen. Hinweise für Beiträge: [Screenshots](docs/SCREENSHOTS.md).
+<sub>Echte Android-Aufnahmen der v0.6, für die öffentliche README bearbeitet: Home-Assistant-Entitäts-IDs, Bluetooth-MAC-Adresse, Gerätebezeichnungen und Benachrichtigungen wurden durch **Beispieldaten** ersetzt. Die Bilder sind **kein** Nachweis für auf der Hardware geprüfte v0.7-Hell-/Dunkeldarstellung. Siehe [Screenshot-Richtlinie](docs/SCREENSHOTS.md).</sub>
+
+Die App akzeptiert aus Sicherheitsgründen **nur HTTPS-Verbindungen** zu Home Assistant; HTTP ist deaktiviert, um Zugriffstokens zu schützen.
 
 ## Bekannte Einschränkungen
 
