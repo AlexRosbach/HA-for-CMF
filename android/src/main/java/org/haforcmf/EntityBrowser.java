@@ -2,11 +2,17 @@ package org.haforcmf;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.Typeface;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.*;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -14,183 +20,230 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/** Searchable, room-aware, multi-select browser for watch favourites. */
+/** Fullscreen, high-contrast entity browser with genuine room/type/search filters. */
 final class EntityBrowser {
     interface OnApply { void accept(List<String> ids); }
     static final int MAX_SELECTION = 24;
-    private static final int INK = Color.rgb(24, 27, 31);
-    private static final int MUTED = Color.rgb(99, 105, 113);
-    private static final String[] TYPES = {
-            "Alle Typen", "Lichter", "Schalter", "Schlösser", "Szenen",
-            "Skripte", "Buttons", "Sensoren", "Weitere"
-    };
-    private static final String[] SORT = {"Name", "Raum", "Typ", "Status"};
-
-    private static int dp(Activity activity, int value) {
-        return Math.round(activity.getResources().getDisplayMetrics().density * value);
+    private static final String[] TYPES={"Alle Typen","Lichter","Schalter","Schlösser",
+            "Szenen","Skripte","Buttons","Sensoren","Weitere"};
+    private static final String[] SORT={"Name (A–Z)","Raum (A–Z)","Typ","Status"};
+    private static String norm(String s){
+        return Normalizer.normalize(s,Normalizer.Form.NFKD)
+                .replaceAll("\\p{M}+","").toLowerCase(Locale.ROOT);
     }
-    private static String normalized(String value) {
-        return Normalizer.normalize(value, Normalizer.Form.NFKD)
-                .replaceAll("\\p{M}+", "").toLowerCase(Locale.ROOT);
-    }
-    private static boolean matches(Home.Entity e, String query) {
-        String haystack = normalized(e.label() + " " + e.id() + " "
-                + e.areaName() + " " + e.state() + " " + e.display());
-        for (String part : normalized(query).trim().split("\\s+")) {
-            if (!part.isEmpty() && !haystack.contains(part)) return false;
+    private static boolean match(Home.Entity e,String query){
+        String data=norm(e.label()+" "+e.id()+" "+e.areaName()+" "+e.state()+" "+e.display());
+        for(String part:norm(query).trim().split("\\s+")){
+            if(!part.isEmpty()&&!data.contains(part))return false;
         }
         return true;
     }
-    private static boolean typeMatches(Home.Entity e, int category) {
-        String domain = e.domain();
-        return switch (category) {
-            case 1 -> domain.equals("light");
-            case 2 -> domain.equals("switch") || domain.equals("input_boolean");
-            case 3 -> domain.equals("lock");
-            case 4 -> domain.equals("scene");
-            case 5 -> domain.equals("script");
-            case 6 -> domain.equals("button") || domain.equals("input_button");
-            case 7 -> domain.equals("sensor") || domain.equals("binary_sensor");
-            case 8 -> !(domain.equals("light") || domain.equals("switch") || domain.equals("lock")
-                        || domain.equals("scene") || domain.equals("script")
-                        || domain.equals("button") || domain.equals("input_button")
-                        || domain.equals("sensor") || domain.equals("binary_sensor"));
-            default -> true;
+    private static boolean type(Home.Entity e,int i){
+        String d=e.domain();
+        return switch(i){
+            case 1->d.equals("light");
+            case 2->d.equals("switch")||d.equals("input_boolean");
+            case 3->d.equals("lock");
+            case 4->d.equals("scene");
+            case 5->d.equals("script");
+            case 6->d.equals("button")||d.equals("input_button");
+            case 7->d.equals("sensor")||d.equals("binary_sensor");
+            case 8->!(d.equals("light")||d.equals("switch")||d.equals("input_boolean")
+                    ||d.equals("lock")||d.equals("scene")||d.equals("script")
+                    ||d.equals("button")||d.equals("input_button")
+                    ||d.equals("sensor")||d.equals("binary_sensor"));
+            default->true;
         };
     }
-    private static Spinner spinner(Activity activity, LinearLayout parent, List<String> values) {
-        Spinner spinner = new Spinner(activity);
-        ArrayAdapter<String> labels = new ArrayAdapter<>(activity,
-                android.R.layout.simple_spinner_dropdown_item, values);
-        spinner.setAdapter(labels);
-        var layout = new LinearLayout.LayoutParams(-1, dp(activity, 44));
-        layout.setMargins(0, dp(activity, 3), 0, dp(activity, 3));
-        parent.addView(spinner, layout);
-        return spinner;
+    private static String symbol(Home.Entity e){
+        return switch(e.domain()){
+            case "light"->"☀";
+            case "lock"->"⌑";
+            case "scene"->"◈";
+            case "switch","input_boolean"->"⏻";
+            case "sensor","binary_sensor"->"◉";
+            case "script","button","input_button"->"▷";
+            default->"◇";
+        };
     }
-    static void show(Activity activity, Home.Catalog catalog, List<String> existing, OnApply apply) {
-        ArrayList<String> chosen = new ArrayList<>(existing);
-        LinearLayout panel = new LinearLayout(activity);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(activity, 18), dp(activity, 6), dp(activity, 18), dp(activity, 10));
-        TextView info = new TextView(activity);
-        info.setTextColor(MUTED);
-        info.setTextSize(13);
-        panel.addView(info);
-        EditText search = new EditText(activity);
-        search.setSingleLine(true);
-        search.setHint("Name, Raum, Entität oder Zustand suchen");
-        search.setTextColor(INK);
-        search.setHintTextColor(MUTED);
-        panel.addView(search);
+    static void show(Activity a, Home.Catalog catalog, List<String> selected, OnApply save){
+        ArrayList<String> chosen=new ArrayList<>(selected);
+        ArrayList<Home.Entity> results=new ArrayList<>();
+        String[] roomNames=new String[catalog.rooms().size()+2];
+        String[] roomIds=new String[roomNames.length];
+        roomNames[0]="Alle Räume"; roomIds[0]="";
+        for(int i=0;i<catalog.rooms().size();i++){
+            roomNames[i+1]=catalog.rooms().get(i).name();
+            roomIds[i+1]=catalog.rooms().get(i).id();
+        }
+        roomNames[roomNames.length-1]="Ohne Raum";
+        roomIds[roomIds.length-1]="__without__";
+        int[] room={0}, category={0},sorting={0};
+        boolean[] available={false},onlyFavorites={false};
+        Dialog dialog=new Dialog(a);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root=UiKit.column(a);
+        root.setBackgroundColor(UiKit.BG);
+        root.setPadding(UiKit.dp(a,18),UiKit.dp(a,16),UiKit.dp(a,18),UiKit.dp(a,8));
+        dialog.setContentView(root);
 
-        ArrayList<String> rooms = new ArrayList<>();
-        rooms.add("Alle Räume");
-        for (Home.Room room : catalog.rooms()) rooms.add(room.name());
-        rooms.add("Ohne Raum");
-        Spinner room = spinner(activity, panel, rooms);
-        Spinner type = spinner(activity, panel, List.of(TYPES));
-        CheckBox onlyAvailable = new CheckBox(activity);
-        onlyAvailable.setText("Nur verfügbare");
-        onlyAvailable.setTextColor(INK);
-        CheckBox onlySelected = new CheckBox(activity);
-        onlySelected.setText("Nur Favoriten");
-        onlySelected.setTextColor(INK);
-        LinearLayout options = new LinearLayout(activity);
-        options.setOrientation(LinearLayout.HORIZONTAL);
-        options.addView(onlyAvailable, new LinearLayout.LayoutParams(0, -2, 1));
-        options.addView(onlySelected, new LinearLayout.LayoutParams(0, -2, 1));
-        panel.addView(options);
-        Spinner sort = spinner(activity, panel, List.of(SORT));
-        ListView list = new ListView(activity);
-        list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
-        panel.addView(list, new LinearLayout.LayoutParams(-1, dp(activity, 285)));
-        ArrayList<Home.Entity> visible = new ArrayList<>();
-        ArrayAdapter<Home.Entity> adapter = new ArrayAdapter<>(activity,
-                android.R.layout.simple_list_item_multiple_choice, visible) {
-            @Override public View getView(int position, View recycled, android.view.ViewGroup parent) {
-                View view = super.getView(position, recycled, parent);
-                TextView name = (TextView) view.findViewById(android.R.id.text1);
-                Home.Entity item = getItem(position);
-                name.setText(item.label() + "\n" + item.areaName() + " · " + item.display()
-                        + "\n" + item.id());
-                name.setTextColor(INK);
-                name.setTextSize(13);
-                name.setMinHeight(dp(activity, 74));
-                name.setPadding(dp(activity, 6), dp(activity, 8), dp(activity, 4), dp(activity, 8));
-                return view;
+        LinearLayout header=UiKit.row(a);
+        TextView heading=UiKit.label(a,"Entitäten-Browser",24,true,UiKit.INK);
+        header.addView(heading,new LinearLayout.LayoutParams(0,UiKit.dp(a,52),1));
+        TextView exit=UiKit.label(a,"✕",23,true,UiKit.INK);
+        exit.setGravity(Gravity.CENTER);
+        header.addView(exit,new LinearLayout.LayoutParams(UiKit.dp(a,48),UiKit.dp(a,48)));
+        exit.setOnClickListener(v->dialog.dismiss());
+        root.addView(header);
+        TextView subtitle=UiKit.label(a,"Suchen · Filtern · Zur Uhr hinzufügen",14,false,UiKit.MUTED);
+        root.addView(subtitle);
+        EditText search=UiKit.field(a,root,"","Entität, Gerät oder Raum suchen","",
+                android.text.InputType.TYPE_CLASS_TEXT);
+        search.setSingleLine(true);
+        LinearLayout filters=UiKit.column(a);
+        root.addView(filters);
+        LinearLayout frow=UiKit.row(a);
+        filters.addView(frow);
+        LinearLayout stateRow=UiKit.row(a);
+        filters.addView(stateRow);
+        TextView roomButton=UiKit.chip(a,frow,"⌂  Alle Räume",false,null);
+        TextView typeButton=UiKit.chip(a,frow,"◈  Alle Typen",false,null);
+        TextView sortButton=UiKit.chip(a,stateRow,"↕  Name",false,null);
+        TextView availableButton=UiKit.chip(a,stateRow,"✓  Verfügbare",false,null);
+        TextView favoriteButton=UiKit.chip(a,stateRow,"♥  Favoriten",false,null);
+        TextView resultCount=UiKit.label(a,"0 Ergebnisse",13,true,UiKit.MUTED);
+        root.addView(resultCount);
+        ListView list=new ListView(a);
+        list.setDividerHeight(0);
+        list.setBackgroundColor(UiKit.BG);
+        root.addView(list,new LinearLayout.LayoutParams(-1,0,1));
+
+        ArrayAdapter<Home.Entity> adapter=new ArrayAdapter<>(a,0,results){
+            @Override public View getView(int position,View recycled,ViewGroup parent){
+                Home.Entity e=getItem(position);
+                LinearLayout card=UiKit.row(a);
+                card.setPadding(UiKit.dp(a,12),UiKit.dp(a,10),UiKit.dp(a,12),UiKit.dp(a,10));
+                card.setBackground(UiKit.bg(a,Color.WHITE,17,UiKit.EDGE));
+                LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(
+                        UiKit.dp(a,35),UiKit.dp(a,50));
+                TextView icon=UiKit.label(a,symbol(e),25,true,UiKit.ORANGE);
+                card.addView(icon,iconParams);
+                LinearLayout texts=UiKit.column(a);
+                card.addView(texts,new LinearLayout.LayoutParams(0,-2,1));
+                TextView title=UiKit.label(a,e.label(),16,true,UiKit.INK);
+                title.setMaxLines(2);
+                texts.addView(title);
+                TextView info=UiKit.label(a,e.areaName()+" · "+e.display(),13,false,UiKit.MUTED);
+                texts.addView(info);
+                TextView id=UiKit.label(a,e.id(),12,false,UiKit.MUTED);
+                id.setSingleLine(true);id.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                texts.addView(id);
+                CheckBox choice=new CheckBox(a);
+                choice.setButtonTintList(ColorStateList.valueOf(UiKit.ORANGE));
+                choice.setChecked(chosen.contains(e.id()));
+                choice.setClickable(false);
+                card.addView(choice,new LinearLayout.LayoutParams(
+                        UiKit.dp(a,45),UiKit.dp(a,55)));
+                LinearLayout outer=UiKit.column(a);
+                outer.setPadding(0,UiKit.dp(a,4),0,UiKit.dp(a,4));
+                outer.addView(card);
+                return outer;
             }
         };
         list.setAdapter(adapter);
-        Runnable update = () -> {
-            String q = search.getText().toString();
-            int category = type.getSelectedItemPosition();
-            String selectedRoom = rooms.get(Math.max(0, room.getSelectedItemPosition()));
-            ArrayList<Home.Entity> match = new ArrayList<>();
-            for (Home.Entity e : catalog.entities()) {
-                if (!selectedRoom.equals("Alle Räume") && !selectedRoom.equals(e.areaName())) continue;
-                if (!typeMatches(e, category) || !matches(e, q)) continue;
-                if (onlyAvailable.isChecked() && (e.state().equals("unavailable")
-                        || e.state().equals("unknown"))) continue;
-                if (onlySelected.isChecked() && !chosen.contains(e.id())) continue;
-                match.add(e);
+        Runnable update=()->{
+            results.clear();
+            String q=search.getText().toString();
+            String roomId=roomIds[room[0]];
+            for(Home.Entity e:catalog.entities()){
+                if(!roomId.isEmpty() && !roomId.equals(e.areaId())
+                        && !(roomId.equals("__without__")&&e.areaId().isEmpty()))continue;
+                if(!type(e,category[0]) || !match(e,q))continue;
+                if(available[0] && (e.state().equals("unknown") ||
+                        e.state().equals("unavailable")))continue;
+                if(onlyFavorites[0]&&!chosen.contains(e.id()))continue;
+                results.add(e);
             }
-            Comparator<Home.Entity> cmp = switch (sort.getSelectedItemPosition()) {
-                case 1 -> Comparator.comparing(Home.Entity::areaName, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparing(Home.Entity::label, String.CASE_INSENSITIVE_ORDER);
-                case 2 -> Comparator.comparing(Home.Entity::domain, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparing(Home.Entity::label, String.CASE_INSENSITIVE_ORDER);
-                case 3 -> Comparator.comparing(Home.Entity::state, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparing(Home.Entity::label, String.CASE_INSENSITIVE_ORDER);
-                default -> Comparator.comparing(Home.Entity::label, String.CASE_INSENSITIVE_ORDER);
+            Comparator<Home.Entity> comparator=switch(sorting[0]){
+                case 1->Comparator.comparing(Home.Entity::areaName,String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER);
+                case 2->Comparator.comparing(Home.Entity::domain,String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER);
+                case 3->Comparator.comparing(Home.Entity::state,String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER);
+                default->Comparator.comparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER);
             };
-            match.sort(cmp);
-            visible.clear();
-            visible.addAll(match);
+            results.sort(comparator);
+            resultCount.setText(results.size()+" Ergebnisse · "+chosen.size()+"/24 Favoriten");
             adapter.notifyDataSetChanged();
-            list.clearChoices();
-            for (int i = 0; i < visible.size(); i++) {
-                list.setItemChecked(i, chosen.contains(visible.get(i).id()));
-            }
-            info.setText(chosen.size() + " / " + MAX_SELECTION + " Favoriten für die Uhr · "
-                    + match.size() + " Treffer");
         };
-        list.setOnItemClickListener((parent, view, position, id) -> {
-            Home.Entity item = visible.get(position);
-            if (!chosen.remove(item.id())) {
-                if (chosen.size() == MAX_SELECTION) {
-                    list.setItemChecked(position, false);
-                    Toast.makeText(activity, "Maximal 24 Favoriten auf der Uhr.", Toast.LENGTH_LONG).show();
+        list.setOnItemClickListener((parent,view,index,id)->{
+            Home.Entity e=results.get(index);
+            if(!chosen.remove(e.id())){
+                if(chosen.size()>=MAX_SELECTION){
+                    Toast.makeText(a,"Maximal 24 Favoriten möglich.",Toast.LENGTH_LONG).show();
                     return;
                 }
-                chosen.add(item.id());
+                chosen.add(e.id());
             }
-            if (onlySelected.isChecked()) update.run();
-            else info.setText(chosen.size() + " / " + MAX_SELECTION + " Favoriten · "
-                    + visible.size() + " Treffer");
+            update.run();
         });
-        search.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) { update.run(); }
-            public void afterTextChanged(Editable s) {}
+        roomButton.setOnClickListener(v->new AlertDialog.Builder(a)
+                .setTitle("Raum auswählen")
+                .setSingleChoiceItems(roomNames,room[0],(d,i)->{
+                    room[0]=i;roomButton.setText("⌂  "+roomNames[i]);
+                    d.dismiss();update.run();
+                }).setNegativeButton("Abbrechen",null).show());
+        typeButton.setOnClickListener(v->new AlertDialog.Builder(a)
+                .setTitle("Gerätetyp auswählen")
+                .setSingleChoiceItems(TYPES,category[0],(d,i)->{
+                    category[0]=i;typeButton.setText("◈  "+TYPES[i]);
+                    d.dismiss();update.run();
+                }).setNegativeButton("Abbrechen",null).show());
+        sortButton.setOnClickListener(v->new AlertDialog.Builder(a)
+                .setTitle("Sortieren")
+                .setSingleChoiceItems(SORT,sorting[0],(d,i)->{
+                    sorting[0]=i;sortButton.setText("↕  "+SORT[i]);
+                    d.dismiss();update.run();
+                }).setNegativeButton("Abbrechen",null).show());
+        availableButton.setOnClickListener(v->{
+            available[0]=!available[0];
+            availableButton.setBackground(UiKit.bg(a,available[0]?UiKit.PEACH:Color.WHITE,30,UiKit.EDGE));
+            update.run();
         });
-        android.widget.AdapterView.OnItemSelectedListener listener = new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                update.run();
+        favoriteButton.setOnClickListener(v->{
+            onlyFavorites[0]=!onlyFavorites[0];
+            favoriteButton.setBackground(UiKit.bg(a,onlyFavorites[0]?UiKit.PEACH:Color.WHITE,30,UiKit.EDGE));
+            update.run();
+        });
+        Handler debounce=new Handler(Looper.getMainLooper());
+        final Runnable[] work={null};
+        search.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){
+                if(work[0]!=null)debounce.removeCallbacks(work[0]);
+                work[0]=update;
+                debounce.postDelayed(work[0],180);
             }
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-        };
-        room.setOnItemSelectedListener(listener);
-        type.setOnItemSelectedListener(listener);
-        sort.setOnItemSelectedListener(listener);
-        onlyAvailable.setOnCheckedChangeListener((buttonView, checked) -> update.run());
-        onlySelected.setOnCheckedChangeListener((buttonView, checked) -> update.run());
+            public void afterTextChanged(Editable s){}
+        });
+        LinearLayout footer=UiKit.row(a);
+        root.addView(footer);
+        LinearLayout buttons=UiKit.column(a);
+        footer.addView(buttons,new LinearLayout.LayoutParams(-1,-2));
+        UiKit.button(a,buttons,"✓  "+chosen.size()+"/24 Favoriten speichern",true,()->{
+            save.accept(chosen);
+            dialog.dismiss();
+        });
+        // Refresh button label as selection changes is not required for action correctness.
         update.run();
-        new AlertDialog.Builder(activity)
-                .setTitle("Favoriten auswählen")
-                .setView(panel)
-                .setNegativeButton("Abbrechen", null)
-                .setPositiveButton("Übernehmen", (dialog, which) -> apply.accept(chosen))
-                .show();
+        Window window=dialog.getWindow();
+        if(window!=null){
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.setLayout(-1,-1);
+        }
+        dialog.show();
+        window=dialog.getWindow();
+        if(window!=null)window.setLayout(-1,-1);
     }
 }
