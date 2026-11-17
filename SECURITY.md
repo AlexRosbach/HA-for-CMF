@@ -22,7 +22,7 @@ Use GitHub's **Private vulnerability reporting / Security Advisories** for this 
 - The watch BLE message channel is **not itself strong authorization**. Never treat an address, paired connection or visual confirmation on the watch as sufficient permission for a door unlock.
 - Watch-originated lock/unlock requests require explicit confirmation on the **phone**. The physical latch/open action is separate and phone-only.
 - Do **not** use this app as a sole means of property access, alarm control or safety-critical automation.
-- The app supports connecting to arbitrary HA URLs including HTTP for LAN installations. Prefer **HTTPS** and avoid exposing unsecured HA endpoints publicly.
+- Starting with v0.7, **HTTPS is required** for all Home Assistant connections. Android cleartext traffic is disabled and the app rejects `http://` URLs. Set up TLS on your Home Assistant reverse proxy or use a TLS-enabled remote endpoint; never expose the HA long-lived token over HTTP.
 - Public CI builds use disposable test signing credentials. They are **not suitable for trusted seamless updates**; a protected persistent release-signing process is needed before stable distribution.
 - Do not submit actual bearer tokens, lock names, GPS coordinates, house addresses, MAC addresses, screenshots of personal notifications or unredacted logs.
 
