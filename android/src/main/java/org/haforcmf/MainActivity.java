@@ -255,7 +255,9 @@ public final class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,
                     View view,int position,long id){
                 String next=position==1?"en":"de";
-                if(!next.equals(SettingsStore.load(MainActivity.this,"language"))){
+                String previous=SettingsStore.load(MainActivity.this,"language");
+                if(previous.isBlank())previous="de";
+                if(!next.equals(previous)){
                     persistSettings();
                     SettingsStore.save(MainActivity.this,"language",next);
                     BridgeService.notifyPagesChanged();
