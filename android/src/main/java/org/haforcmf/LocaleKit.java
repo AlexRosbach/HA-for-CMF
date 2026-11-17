@@ -16,6 +16,7 @@ final class LocaleKit {
         add("Alle Räume","All rooms");
         add("Ohne Raum","No room");
         add("Räume und Status aktualisieren","Refresh rooms & status");
+        add("↻  Räume und Status aktualisieren","↻  Refresh rooms & status");
         add("⌕  Alle Entitäten durchsuchen","⌕  Browse all entities");
         add("Alle Entitäten durchsuchen","Browse all entities");
         add("Entitäten-Browser","Entity browser");
@@ -89,6 +90,9 @@ final class LocaleKit {
         add("Gerät, Entität oder Raum suchen","Search device, entity or room");
         add("Tippe auf einen Eintrag","Tap an item");
         add("Entitäten konnten nicht geladen werden: ","Could not load entities: ");
+        add("Entität wählen","Choose entity");
+        add("Kachel leeren","Clear tile");
+        add("Favoriten auf","favourites on");
         add("Bitte zuerst Home Assistant verbinden.","Connect Home Assistant first.");
         add("Entität, Gerät oder Raum suchen","Search entity, device or room");
         add("Suchen · Filtern · Zur Uhr hinzufügen","Search · Filter · Add to watch");
@@ -113,6 +117,11 @@ final class LocaleKit {
         add("Ergebnisse","Results");
         add("Treffer","Results");
         add("Favoriten speichern","Save favourites");
+        add("⌂  Alle Räume","⌂  All rooms");
+        add("◈  Alle Typen","◈  All types");
+        add("↕  Name","↕  Name");
+        add("✓  Verfügbare","✓  Available");
+        add("♥  Favoriten","♥  Favourites");
         add("Maximal 24 Favoriten möglich.","Maximum 24 favourites.");
         add("Entitäten laden","Loading entities");
         add("Schlossaktion von Uhr bestätigen?","Confirm watch lock action?");
