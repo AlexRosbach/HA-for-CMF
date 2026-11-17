@@ -90,19 +90,20 @@ final class WatchPages {
     /** Human-readable fallback for the watch's narrow tiles; custom aliases override it. */
     static String shortLabel(String original) {
         if(original==null || original.isBlank())return "Unbenannt";
-        String name=original.trim();
+        String name=original.strip();
         int hyphen=name.lastIndexOf(" - ");
-        if(hyphen>=0 && hyphen+3<name.length())name=name.substring(hyphen+3).trim();
-        if(name.length()>10){
-            String[] words=name.split("\\s+");
-            for(int i=words.length-1;i>=0;i--){
-                if(words[i].length()>=3 && words[i].length()<=10){
-                    name=words[i];
-                    break;
-                }
-            }
+        if(hyphen>=0 && hyphen+3<name.length())name=name.substring(hyphen+3).strip();
+        if(name.length()<=10)return name;
+        String[] words=name.split("\\s+");
+        String best="";
+        for(String word:words){
+            String lower=word.toLowerCase(java.util.Locale.ROOT);
+            if(lower.equals("lampe") || lower.equals("licht") || lower.equals("neu")
+                    || lower.equals("home") || lower.equals("assistant") ||
+                    lower.equals("smart"))continue;
+            if(word.length()>best.length())best=word;
         }
-        return name;
+        return best.isEmpty()?name:best;
     }
 
     static boolean validId(String id) {
