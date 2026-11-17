@@ -273,20 +273,44 @@ public final class MainActivity extends Activity {
     }
 
     private void showFavorites(){
-        if(ids.isEmpty()){toast("Noch keine Favoriten ausgewählt.");return;}
-        var options=ids.toArray(String[]::new);
+        if(ids.isEmpty()){
+            new AlertDialog.Builder(this).setTitle("Favoriten fehlen")
+                    .setMessage("Suche nach Geräten und füge deine Favoriten für die Uhr hinzu.")
+                    .setNegativeButton("Abbrechen",null)
+                    .setPositiveButton("Entitäten öffnen",(d,w)->chooseEntities()).show();
+            return;
+        }
+        String[] options=new String[ids.size()];
+        for(int i=0;i<ids.size();i++){
+            String id=ids.get(i), label=id;
+            if(catalog!=null){
+                for(Home.Entity e:catalog.entities()){
+                    if(e.id().equals(id)){label=e.label()+" · "+e.areaName();break;}
+                }
+            }
+            options[i]=(i+1)+".  "+label;
+        }
         new AlertDialog.Builder(this)
-                .setTitle("Favoriten für die Uhr ("+ids.size()+"/24)")
-                .setItems(options,(dialog,which)->{
-                    new AlertDialog.Builder(this).setTitle("Favorit entfernen?")
-                            .setMessage(options[which])
-                            .setNegativeButton("Abbrechen",null)
-                            .setPositiveButton("Entfernen",(d,w)->{
-                                ids.remove(options[which]);
-                                selected.setText(ids.size()+" Favoriten ausgewählt");
-                                renderRoom();
+                .setTitle("Uhr-Favoriten · "+ids.size()+"/24")
+                .setItems(options,(dialog,index)->{
+                    String entityId=ids.get(index);
+                    new AlertDialog.Builder(this)
+                        .setTitle(options[index])
+                        .setItems(new String[]{"↑  Nach oben","↓  Nach unten","✕  Entfernen"},
+                            (d,action)->{
+                                if(action==0 && index>0){
+                                    java.util.Collections.swap(ids,index,index-1);
+                                }else if(action==1 && index<ids.size()-1){
+                                    java.util.Collections.swap(ids,index,index+1);
+                                }else if(action==2){
+                                    ids.remove(entityId);
+                                }
+                                selected.setText(ids.size()+" Favoriten für die Uhr");
+                                showFavorites();
                             }).show();
-                }).setPositiveButton("Schließen",null).show();
+                })
+                .setNeutralButton("Hinzufügen",(d,w)->chooseEntities())
+                .setPositiveButton("Fertig",null).show();
     }
 
     private void handleWatchIntent(Intent intent) {
@@ -507,6 +531,25 @@ public final class MainActivity extends Activity {
             TextView detail = text(row, entity.areaName() + " · " + entity.display());
             detail.setTextSize(13);
             detail.setTextColor(MUTED);
+            if(entity.dimmable() && entity.state().equals("on")){
+                var brightness=UiKit.label(this,"Helligkeit "+entity.brightnessPercent()+" %",13,false,UiKit.MUTED);
+                row.addView(brightness);
+                SeekBar slider=new SeekBar(this);
+                slider.setMax(100);
+                slider.setProgress(Math.max(1,entity.brightnessPercent()));
+                slider.setProgressTintList(android.content.res.ColorStateList.valueOf(UiKit.ORANGE));
+                slider.setThumbTintList(android.content.res.ColorStateList.valueOf(UiKit.ORANGE));
+                row.addView(slider);
+                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    public void onProgressChanged(SeekBar bar,int value,boolean user){
+                        if(user)brightness.setText("Helligkeit "+value+" %");
+                    }
+                    public void onStartTrackingTouch(SeekBar bar){}
+                    public void onStopTrackingTouch(SeekBar bar){
+                        setBrightness(entity,Math.max(1,bar.getProgress()));
+                    }
+                });
+            }
             if (entity.isLock() && entity.controllable()) {
                 boolean unlock = entity.state().equals("locked");
                 button(row, unlock ? "Schloss entsperren …" : "Schloss verriegeln …",
@@ -526,6 +569,23 @@ public final class MainActivity extends Activity {
             hint.setTextColor(MUTED);
             hint.setTextSize(13);
         }
+    }
+
+    private void setBrightness(Home.Entity entity,int percent){
+        final Home home;
+        try{home=new Home(url.getText().toString(),token.getText().toString());}
+        catch(Exception ex){toast("Home Assistant Zugangsdaten fehlen.");return;}
+        new Thread(()->{
+            try{
+                home.setBrightness(entity,percent);
+                runOnUiThread(()->{
+                    toast("Helligkeit angepasst");
+                    refreshQuickActions();
+                });
+            }catch(Exception ex){
+                runOnUiThread(()->toast("Dimmen fehlgeschlagen: "+ex.getMessage()));
+            }
+        },"HA dimming").start();
     }
 
     private String iconFor(Home.Entity entity) {
