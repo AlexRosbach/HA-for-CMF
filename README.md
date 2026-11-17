@@ -51,10 +51,10 @@ The watch must already have the compatible custom WP2 Apps loader installed. Thi
 - Open **Favoriten für die Uhr auswählen** to browse entities with multi-term search (name, ID, room, state) and filters for room, type, availability, and favourites. Select up to 24 entities; the watch groups them by Home Assistant room in pages of four. The watch page arrows navigate between rooms.
 - **Räume & Geräte** on Android loads live room assignments from Home Assistant using `areas()`, `area_name()`, and `area_entities()` through `/api/template`. Pick a room to see its devices and controls. The first 30 devices are shown in the room view.
 - **Lock actions require explicit confirmation.** On Android every unlock and lock action shows a confirmation dialog naming the room and entity, then rechecks its live state. On the watch, the first tap on a lock shows **UNLOCK? / LOCK?** and **TAP AGAIN**; only a second tap within 5 seconds requests the action.
-- A lock is **unlocked** via `lock.unlock`, rather than physically unlatching a door with `lock.open`. The latter is not enabled in this release.
+- **Unlock** calls `lock.unlock`; **Tür öffnen (Schnapper)** calls `lock.open` only for locks advertising `LockEntityFeature.OPEN` (`supported_features & 1`). Each action has its own explicit confirmation dialog on Android. The watch deliberately offers only lock/unlock, not physical unlatching.
 - Areas not exposed by older Home Assistant versions are grouped under **Ohne Raum**. Filtering and controls still work.
 - The launcher now uses an orange app icon, and native Android labels use dark foreground colors on light cards.
 
-Security: The Android app retains your access token in memory for the session only. Do not leave a paired phone unlocked and unattended when adding door locks to watch favourites. Lock actions need an active bridge. Test any lock against the correct entity and door before relying on it for access. The new watch and phone versions must be installed together for room page metadata support.
+Security: The Android app retains your access token in memory for the session only. Do not leave a paired phone unlocked and unattended when adding door locks to watch favourites. Watch lock actions need an active bridge. Test any lock against the correct entity and door before relying on it for access. The new watch and phone versions must be installed together for room page metadata support.
 
 This build is a **pre-release** because real CMF Watch Pro 2 Bluetooth and locking behavior still need device-level verification.
