@@ -2,7 +2,7 @@
 
 ## Public gallery
 
-The public README embeds [readme-ui-redacted.jpg](screenshots/readme-ui-redacted.jpg). It is a **montage derived from actual v0.6 Android screenshots**, not a render or screenshot of the v0.7 language/theme release. The source screenshots were provided during real-device troubleshooting.
+The public README embeds [readme-ui-redacted.jpg](screenshots/readme-ui-redacted.webp). It is a **montage derived from actual v0.6 Android screenshots**, not a render or screenshot of the v0.7 language/theme release. The source screenshots were provided during real-device troubleshooting.
 
 Changes applied before publication:
 - Cropped away the phone status bar, notifications and the song/media title.
