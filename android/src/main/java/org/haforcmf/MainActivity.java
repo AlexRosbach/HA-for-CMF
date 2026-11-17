@@ -132,7 +132,7 @@ public final class MainActivity extends Activity {
         var areaLabel=text(quickCard,"RAUM AUSWÄHLEN");
         areaLabel.setTextSize(12);areaLabel.setTextColor(UiKit.MUTED);
         roomPicker=new Spinner(this);
-        roomPicker.setBackground(UiKit.bg(this,Color.WHITE,12,UiKit.EDGE));
+        roomPicker.setBackground(UiKit.bg(this,UiKit.CARD,12,UiKit.EDGE));
         roomOptions.add("Alle Räume");
         roomOptionIds.add("");
         var roomsAdapter=new ArrayAdapter<String>(this,
@@ -140,7 +140,7 @@ public final class MainActivity extends Activity {
             @Override public View getView(int position, View convertView,
                     android.view.ViewGroup parent) {
                 var v=(TextView)super.getView(position,convertView,parent);
-                v.setTextColor(UiKit.INK);v.setPadding(dp(12),0,dp(12),0);return v;
+                v.setTextColor(UiKit.INK);v.setPadding(dp(12),0,dp(12),0);v.setBackgroundColor(UiKit.CARD);return v;
             }
         };
         roomPicker.setAdapter(roomsAdapter);
@@ -439,12 +439,12 @@ public final class MainActivity extends Activity {
             intent.removeExtra("watch_lock_id");
             showTab(0);
             new AlertDialog.Builder(this)
-                    .setTitle("Schlossaktion von Uhr bestätigen?")
+                    .setTitle(LocaleKit.t(this,"Schlossaktion von Uhr bestätigen?"))
                     .setMessage((name==null?lockId:name)+"\n"+lockId+"\n\n"
                             +(unlock?"Schloss entriegeln?":"Schloss verriegeln?")
                             +"\nDie Aktion wird erst nach dieser Bestätigung gesendet.")
-                    .setNegativeButton("Abbrechen",null)
-                    .setPositiveButton(unlock?"Ja, entriegeln":"Ja, verriegeln",
+                    .setNegativeButton(LocaleKit.t(this,"Abbrechen"),null)
+                    .setPositiveButton(LocaleKit.t(this,unlock?"Ja, entriegeln":"Ja, verriegeln"),
                             (dialog,which)->{
                                 startForegroundService(new Intent(this,BridgeService.class)
                                         .setAction(BridgeService.ACTION_CONFIRM_LOCK)
@@ -683,7 +683,7 @@ public final class MainActivity extends Activity {
                 .setTitle("Schloss " + (unlock ? "entsperren" : "verriegeln") + "?")
                 .setMessage("Raum: " + entity.areaName() + "\nSchloss: " + entity.label()
                         + "\n\nSoll dieses Schloss wirklich " + action + " werden?")
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(LocaleKit.t(this,"Abbrechen"), null)
                 .setPositiveButton(unlock ? "Ja, entsperren" : "Ja, verriegeln",
                         (dialog, which) -> runLockAction(entity, unlock))
                 .show();
@@ -691,12 +691,12 @@ public final class MainActivity extends Activity {
 
     private void confirmLatch(Home.Entity entity) {
         new AlertDialog.Builder(this)
-                .setTitle("Tür wirklich öffnen?")
+                .setTitle(LocaleKit.t(this,"Tür wirklich öffnen?"))
                 .setMessage("Raum: " + entity.areaName() + "\nSchloss: " + entity.label()
                         + "\n\nDas Türschloss gibt die Falle frei. Die Tür kann danach"
                         + " unter Umständen sofort geöffnet werden.")
                 .setNegativeButton("Abbrechen", null)
-                .setPositiveButton("Ja, Tür öffnen", (dialog, which) -> runLatchAction(entity))
+                .setPositiveButton(LocaleKit.t(this,"Ja, Tür öffnen"), (dialog, which) -> runLatchAction(entity))
                 .show();
     }
 
@@ -798,7 +798,7 @@ public final class MainActivity extends Activity {
         var addresses = new ArrayList<String>();
         var adapterList = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, listLabels);
         var picker = new AlertDialog.Builder(this)
-                .setTitle("Bluetooth-Geräte in der Nähe")
+                .setTitle(LocaleKit.t(this,"Bluetooth-Geräte in der Nähe"))
                 .setAdapter(adapterList, (dialog, which) -> {
                     if (which >= addresses.size()) return;
                     address = addresses.get(which);
@@ -807,7 +807,7 @@ public final class MainActivity extends Activity {
                     persistSettings();
                     stopScan.run();
                 })
-                .setNegativeButton("Schließen", (dialog, which) -> stopScan.run())
+                .setNegativeButton(LocaleKit.t(this,"Schließen"), (dialog, which) -> stopScan.run())
                 .create();
         picker.setOnDismissListener(dialog -> stopScan.run());
         Runnable refresh = () -> {
