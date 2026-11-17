@@ -17,7 +17,7 @@ mkdir "$classes/assets"
 cp "$root/../.build/ha-for-cmf.wp2app" "$classes/assets/"
 "$ANDROID_BUILD_TOOLS/d8" --release --min-api 31 --lib "$ANDROID_JAR" --output "$classes" "$classes/code.jar"
 "$ANDROID_BUILD_TOOLS/aapt2" link -I "$ANDROID_JAR" --manifest "$root/src/main/AndroidManifest.xml" \
-  -A "$classes/assets" --version-code 2 --version-name 0.2.0 -o "$classes/unaligned.apk"
+  -A "$classes/assets" --version-code 3 --version-name 0.3.0 -o "$classes/unaligned.apk"
 (cd "$classes" && zip -q unaligned.apk classes*.dex)
 "$ANDROID_BUILD_TOOLS/zipalign" -f 4 "$classes/unaligned.apk" "$classes/aligned.apk"
 "$ANDROID_BUILD_TOOLS/apksigner" sign --ks "$APK_KEYSTORE" --ks-key-alias "$APK_KEY_ALIAS" \

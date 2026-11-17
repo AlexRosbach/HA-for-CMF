@@ -1,0 +1,59 @@
+name: Build Android and watch packages
+
+on:
+  pull_request:
+  push:
+    branches: [main, feature/ui-redesign-ble-discovery]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-24.11
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabi
+      - uses: astral-sh/setup-uv@v6
+      - name: Build CMF watch package
+        run: bash build.sh
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Create CI test signing key
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci-test.jks" -alias ci -keyalg RSA -keysize 2048 -validity 3650 -storepass android -keypass android -dname "CN=CI Test, O=HA for CMF"
+      - name: Build and verify Android APK
+        env:
+          APK_KEYSTORE: ${{ runner.temp }}/ci-test.jks
+          APK_KEY_ALIAS: ci
+          APK_KEYSTORE_PASSWORD: android
+        run: |
+          export ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
+          export ANDROID_BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          bash android/build.sh
+      - name: Archive installable test APK and watch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha-for-cmf-ci-packages
+          path: |
+            android/.build/ha-for-cmf-android.apk
+            .build/ha-for-cmf.wp2app
+          if-no-files-found: error

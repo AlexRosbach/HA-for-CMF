@@ -8,10 +8,12 @@ cmf_wp2_app::entry!(main);
 
 const MAX: usize = 4;
 const FIELD: usize = 10;
-const BG: Rgb = Rgb(2, 6, 9);
-const INK: Rgb = Rgb(242, 247, 250);
-const MUTED: Rgb = Rgb(164, 177, 190);
-const CYAN: Rgb = Rgb(85, 217, 254);
+const BG: Rgb = Rgb(8, 10, 13);
+const INK: Rgb = Rgb(250, 250, 250);
+const MUTED: Rgb = Rgb(156, 158, 166);
+const ORANGE: Rgb = Rgb(255, 106, 24);
+const GREEN: Rgb = Rgb(90, 220, 146);
+const CARD: Rgb = Rgb(37, 39, 44);
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct Tile {
@@ -68,32 +70,43 @@ impl Screen {
 }
 
 const TILE_W: i32 = 174;
-const TILE_H: i32 = 88;
+const TILE_H: i32 = 107;
 
 fn tile_origin(index: usize, count: usize) -> (i32, i32) {
     let row = index / 2;
     let centered = count == 1 || (count == 3 && index == 2);
     let x = if centered { 146 } else { 51 + (index % 2) as i32 * 190 };
-    let y = if count < 3 { 180 } else { 139 + row as i32 * 100 };
+    let y = if count < 3 { 198 } else { 153 + row as i32 * 117 };
     (x, y)
 }
 
 fn render(mut api: &Api, screen: &Screen, waiting: Option<usize>, offline: bool) {
     api.rect(0, 0, 466, 466, BG.rgb565());
-    text::centre(&mut api, 233, 87, "HOME ASSISTANT", MUTED.rgb565());
+    // CMF-inspired high-contrast design; keep the BLE tile protocol unchanged.
+    text::centre(&mut api, 233, 52, "HA FOR CMF", MUTED.rgb565());
+    let status = if offline { "PHONE OFFLINE" }
+        else if screen.count == 0 { "CONNECTING..." }
+        else { "CONNECTED" };
+    text::centre(&mut api, 233, 83, status, (if offline { ORANGE } else { GREEN }).rgb565());
+    draw::rrect(&mut api, 77, 107, 312, 35, 17, CARD, BG);
+    text::centre(&mut api, 233, 117, "HOME ASSISTANT", INK.rgb565());
     if screen.count == 0 {
-        text::centre(&mut api, 233, 218, if offline { "Phone offline" } else { "Connecting..." }, INK.rgb565());
+        text::centre(&mut api, 233, 239, if offline { "Wake phone & retry" } else { "Waiting for bridge" }, INK.rgb565());
     }
     for (index, tile) in screen.tiles[..screen.count].iter().enumerate() {
         let (x, y) = tile_origin(index, screen.count);
         let lit = !offline && tile.flags == 3;
-        let fill = if lit { Rgb(17, 49, 62) } else { Rgb(18, 27, 36) };
-        let marker = if lit { CYAN } else { MUTED };
-        draw::rrect(&mut api, x, y, TILE_W, TILE_H, 18, fill, BG);
-        text::centre(&mut api, x + TILE_W / 2, y + 16, tile.title(), MUTED.rgb565());
-        let value = if offline { "Offline" } else if waiting == Some(index) { "Updating" } else { tile.value() };
-        text::centre(&mut api, x + TILE_W / 2, y + 49, value, marker.rgb565());
+        let fill = if lit { ORANGE } else { CARD };
+        let foreground = if lit { BG } else { INK };
+        draw::rrect(&mut api, x, y, TILE_W, TILE_H, 21, fill, BG);
+        text::centre(&mut api, x + TILE_W / 2, y + 20, tile.title(), foreground.rgb565());
+        let value = if offline { "Offline" }
+            else if waiting == Some(index) { "Updating..." }
+            else { tile.value() };
+        text::centre(&mut api, x + TILE_W / 2, y + 65, value,
+            if lit { BG } else if offline { ORANGE } else { INK }.rgb565());
     }
+    text::centre(&mut api, 233, 422, "SMART HOME", MUTED.rgb565());
     api.show();
 }
 

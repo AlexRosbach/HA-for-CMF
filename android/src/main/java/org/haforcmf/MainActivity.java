@@ -4,6 +4,15 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.*;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanSettings;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.content.res.ColorStateList;
+import java.util.Set;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Intent;
@@ -25,41 +34,120 @@ public final class MainActivity extends Activity {
     private final List<String> ids = new ArrayList<>();
     private String address;
     private Runnable stopScan = () -> {};
+    private static final int ORANGE = Color.rgb(255, 105, 25);
+    private static final int TEXT = Color.rgb(27, 29, 34);
+    private static final int MUTED = Color.rgb(104, 110, 120);
+    private static final int SURFACE = Color.rgb(247, 248, 250);
+    private LinearLayout content;
+    private LinearLayout quickActions;
+    private TextView scanState;
+
+    private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
+    private GradientDrawable shape(int color, int corner) {
+        var d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(corner));
+        return d;
+    }
+    private LinearLayout card(LinearLayout parent) {
+        var box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(16), dp(18), dp(16));
+        box.setBackground(shape(SURFACE, 20));
+        var p = new LinearLayout.LayoutParams(-1, -2);
+        p.setMargins(0, dp(10), 0, dp(8));
+        parent.addView(box, p);
+        return box;
+    }
+    private void heading(LinearLayout parent, String title, String detail) {
+        var h = text(parent, title);
+        h.setTextSize(25);
+        h.setTypeface(null, Typeface.BOLD);
+        h.setTextColor(TEXT);
+        if (detail != null) {
+            var description = text(parent, detail);
+            description.setTextSize(14);
+            description.setTextColor(MUTED);
+            description.setPadding(0, dp(6), 0, dp(10));
+        }
+    }
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         var scroll = new ScrollView(this);
-        var content = new LinearLayout(this);
+        scroll.setBackgroundColor(Color.WHITE);
+        content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        int pad = Math.round(24 * getResources().getDisplayMetrics().density);
-        content.setPadding(pad, pad * 2, pad, pad);
+        content.setPadding(dp(22), dp(24), dp(22), dp(36));
         scroll.setFillViewport(true);
         scroll.addView(content);
         setContentView(scroll);
-        var title = text(content, "HA for CMF");
-        title.setTextSize(32);
-        text(content, "Choose up to four Home Assistant entities for your Watch Pro 2.");
-        url = input(content, "Home Assistant URL", "http://homeassistant.local:8123", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        token = input(content, "Access token", "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        var appTitle = text(content, "●  HA for CMF");
+        appTitle.setTextColor(ORANGE);
+        appTitle.setTextSize(21);
+        appTitle.setTypeface(null, Typeface.BOLD);
+        appTitle.setPadding(0, 0, 0, dp(26));
+
+        heading(content, "Deine CMF Watch verbinden",
+                "Home Assistant auf deiner Watch Pro 2. Verbinde zuerst die Uhr und wähle anschließend deine Geräte aus.");
+        var connection = card(content);
+        var watchTitle = text(connection, "CMF Watch Pro 2");
+        watchTitle.setTextColor(TEXT);
+        watchTitle.setTypeface(null, Typeface.BOLD);
+        watchTitle.setTextSize(19);
+        watch = text(connection, "Noch keine Uhr ausgewählt");
+        watch.setTextColor(MUTED);
+        scanState = text(connection, "Bluetooth-Suche bereit");
+        scanState.setTextColor(MUTED);
+        scanState.setTextSize(13);
+        button(connection, "⌕  Uhr suchen", this::scan);
+        var hint = text(connection, "Tipp: Uhr aufwecken. Falls Nothing X die Verbindung hält, dort vorübergehend trennen.");
+        hint.setTextColor(MUTED);
+        hint.setTextSize(12);
+
+        heading(content, "Home Assistant", "URL und Zugriffstoken bleiben nur während dieser App-Sitzung im Speicher.");
+        var homeCard = card(content);
+        url = input(homeCard, "Home Assistant URL", "http://homeassistant.local:8123",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        token = input(homeCard, "Access token", "",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         token.setSaveEnabled(false);
-        button(content, "Choose entities", this::chooseEntities);
-        selected = text(content, "No entities selected");
-        button(content, "Find watch", this::scan);
-        watch = text(content, "No watch selected");
-        button(content, "Install or update watch app", () -> {
+        button(homeCard, "Geräte auswählen (max. 4)", this::chooseEntities);
+        selected = text(homeCard, "Noch keine Geräte ausgewählt");
+        selected.setTextColor(MUTED);
+        heading(content, "Schnellsteuerung", "Ausgewählte Geräte direkt auf dem Handy steuern.");
+        var quickCard = card(content);
+        button(quickCard, "Status aktualisieren", this::refreshQuickActions);
+        quickActions = new LinearLayout(this);
+        quickActions.setOrientation(LinearLayout.VERTICAL);
+        quickCard.addView(quickActions);
+        text(quickActions, "Bitte zuerst Home-Assistant-Geräte auswählen.");
+
+        heading(content, "Uhr-App & Verbindung", "Für die Installation wird WP2 Apps mit Loader auf der Uhr benötigt.");
+        var actions = card(content);
+        button(actions, "Uhr-App installieren / aktualisieren", () -> {
             if (!bluetoothAllowed()) return;
-            if (address == null) { toast("Find and select your watch first."); return; }
+            if (address == null) { toast("Bitte zuerst die Uhr auswählen."); return; }
             startForegroundService(new Intent(this, BridgeService.class)
                     .putExtra("install", true).putExtra("address", address));
         });
-        button(content, "Start bridge", this::startBridge);
-        button(content, "Stop bridge", () -> {
+        button(actions, "Bridge starten", this::startBridge);
+        button(actions, "Bridge stoppen", () -> {
             stopService(new Intent(this, BridgeService.class));
             BridgeService.status = "Bridge stopped";
         });
-        status = text(content, BridgeService.status);
+        status = text(actions, BridgeService.status);
+        status.setTextColor(MUTED);
+        status.setTextSize(13);
         ui.post(new Runnable() {
-            @Override public void run() { status.setText(BridgeService.status); ui.postDelayed(this, 750); }
+            @Override public void run() {
+                status.setText(BridgeService.status);
+                ui.postDelayed(this, 1000);
+            }
         });
     }
 
@@ -84,8 +172,16 @@ public final class MainActivity extends Activity {
     private void button(LinearLayout parent, String label, Runnable action) {
         var button = new Button(this);
         button.setText(label);
+        button.setAllCaps(false);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(14);
+        button.setTypeface(null, Typeface.BOLD);
+        button.setBackgroundTintList(ColorStateList.valueOf(ORANGE));
+        button.setMinHeight(dp(52));
+        var p = new LinearLayout.LayoutParams(-1, dp(52));
+        p.setMargins(0, dp(10), 0, dp(4));
+        parent.addView(button, p);
         button.setOnClickListener(v -> action.run());
-        parent.addView(button);
     }
 
     private void toast(String value) { Toast.makeText(this, value, Toast.LENGTH_LONG).show(); }
@@ -147,54 +243,198 @@ public final class MainActivity extends Activity {
                 .setNegativeButton("Cancel", null).setPositiveButton("Apply", (dialog, which) -> {
                     ids.clear();
                     ids.addAll(checked);
-                    selected.setText(ids.isEmpty() ? "No entities selected" : String.join("\n", ids));
+                    selected.setText(ids.isEmpty() ? "Keine Geräte ausgewählt" : String.join("\n", ids));
+                    refreshQuickActions();
                 }).show();
+    }
+
+    private void refreshQuickActions() {
+        if (quickActions == null) return;
+        quickActions.removeAllViews();
+        if (ids.isEmpty()) {
+            text(quickActions, "Keine Geräte ausgewählt.");
+            return;
+        }
+        final Home home;
+        try {
+            home = new Home(url.getText().toString(), token.getText().toString());
+        } catch (IllegalArgumentException ex) {
+            text(quickActions, "Bitte zuerst URL und Token eingeben.");
+            return;
+        }
+        text(quickActions, "Aktualisiere Status …");
+        new Thread(() -> {
+            try {
+                var states = home.states();
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    quickActions.removeAllViews();
+                    for (String id : ids) {
+                        Home.Entity entity = states.get(id);
+                        if (entity == null) {
+                            text(quickActions, id + " · Nicht verfügbar");
+                            continue;
+                        }
+                        var row = card(quickActions);
+                        var title = text(row, entity.label());
+                        title.setTextColor(TEXT);
+                        title.setTypeface(null, Typeface.BOLD);
+                        var value = text(row, entity.display() + "  ·  " + id);
+                        value.setTextColor(MUTED);
+                        value.setTextSize(13);
+                        if (entity.canSwitch()) {
+                            boolean on = entity.actionable() || !"on".equals(entity.state());
+                            button(row, entity.actionable() ? "Ausführen" : (on ? "Einschalten" : "Ausschalten"),
+                                    () -> runQuickAction(entity, on));
+                        }
+                    }
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    quickActions.removeAllViews();
+                    text(quickActions, "Home Assistant nicht erreichbar: " + ex.getMessage());
+                });
+            }
+        }, "Load quick actions").start();
+    }
+
+    private void runQuickAction(Home.Entity entity, boolean on) {
+        try {
+            var home = new Home(url.getText().toString(), token.getText().toString());
+            new Thread(() -> {
+                try {
+                    home.set(entity, on);
+                    runOnUiThread(() -> {
+                        toast("Aktion gesendet: " + entity.label());
+                        refreshQuickActions();
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> toast("Aktion fehlgeschlagen: " + ex.getMessage()));
+                }
+            }, "Home Assistant quick action").start();
+        } catch (IllegalArgumentException ex) {
+            toast(ex.getMessage());
+        }
     }
 
     private boolean bluetoothAllowed() {
         var needed = new ArrayList<String>();
-        for (String p : new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT}) {
+        for (String p : new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.ACCESS_FINE_LOCATION}) {
             if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) needed.add(p);
         }
         if (needed.isEmpty()) return true;
         requestPermissions(needed.toArray(String[]::new), 1);
-        toast("Grant Nearby devices, then try again.");
+        toast("Bluetooth- und Standortberechtigung erlauben und erneut suchen.");
         return false;
     }
 
     private void scan() {
         if (!bluetoothAllowed()) return;
         stopScan.run();
-        var adapter = getSystemService(BluetoothManager.class).getAdapter();
-        var scanner = adapter == null ? null : adapter.getBluetoothLeScanner();
-        if (scanner == null) { toast("Turn on Bluetooth first."); return; }
+        var manager = getSystemService(BluetoothManager.class);
+        var adapter = manager == null ? null : manager.getAdapter();
+        if (adapter == null || !adapter.isEnabled()) {
+            scanState.setText("Bluetooth ist deaktiviert");
+            toast("Bitte Bluetooth aktivieren.");
+            return;
+        }
+        var scanner = adapter.getBluetoothLeScanner();
+        if (scanner == null) {
+            scanState.setText("Bluetooth-Scanner nicht verfügbar");
+            return;
+        }
+
+        // Show all advertising devices: the watch may advertise a shortened or
+        // generic name, and manufacturer/service payloads can vary by firmware.
         var found = new LinkedHashMap<String, String>();
+        var descriptions = new LinkedHashMap<String, String>();
+        var listLabels = new ArrayList<String>();
+        var addresses = new ArrayList<String>();
+        var adapterList = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, listLabels);
+        var picker = new AlertDialog.Builder(this)
+                .setTitle("Bluetooth-Geräte in der Nähe")
+                .setAdapter(adapterList, (dialog, which) -> {
+                    if (which >= addresses.size()) return;
+                    address = addresses.get(which);
+                    watch.setText(descriptions.get(address));
+                    scanState.setText("Ausgewählt: " + address);
+                    stopScan.run();
+                })
+                .setNegativeButton("Schließen", (dialog, which) -> stopScan.run())
+                .create();
+        picker.setOnDismissListener(dialog -> stopScan.run());
+        Runnable refresh = () -> {
+            listLabels.clear();
+            addresses.clear();
+            for (var entry : found.entrySet()) {
+                addresses.add(entry.getKey());
+                listLabels.add(entry.getValue() + "\n" + entry.getKey());
+            }
+            adapterList.notifyDataSetChanged();
+        };
+        try {
+            for (BluetoothDevice device : adapter.getBondedDevices()) {
+                String name = device.getName();
+                if (name != null && !name.isBlank()) {
+                    found.put(device.getAddress(), name + " · gekoppelt");
+                    descriptions.put(device.getAddress(), name);
+                }
+            }
+        } catch (SecurityException ignored) { }
+        refresh.run();
         var callback = new ScanCallback() {
             @Override public void onScanResult(int type, ScanResult result) {
-                var record = result.getScanRecord();
                 var device = result.getDevice();
+                var record = result.getScanRecord();
                 String name = record == null ? null : record.getDeviceName();
-                if (name == null) name = device.getName();
-                if (name == null || !name.startsWith("CMF Watch Pro 2")) return;
-                String label = name;
-                runOnUiThread(() -> found.put(device.getAddress(), label));
+                if (name == null || name.isBlank()) name = device.getName();
+                String id = device.getAddress();
+                String label = (name == null || name.isBlank() ? "Unbekanntes BLE-Gerät" : name);
+                final String display = label;
+                runOnUiThread(() -> {
+                    if (!found.containsKey(id) || !found.get(id).equals(display)) {
+                        found.put(id, display);
+                        descriptions.put(id, display);
+                        refresh.run();
+                    }
+                    scanState.setText(found.size() + " Bluetooth-Geräte gefunden");
+                });
+            }
+            @Override public void onScanFailed(int errorCode) {
+                runOnUiThread(() -> {
+                    scanState.setText("Bluetooth-Suche fehlgeschlagen: " + errorCode);
+                    toast("BLE Scan-Fehler " + errorCode + ". Bluetooth und Berechtigungen prüfen.");
+                    picker.dismiss();
+                });
             }
         };
         final boolean[] active = {true};
-        stopScan = () -> { if (active[0]) { active[0] = false; scanner.stopScan(callback); } };
-        scanner.startScan(callback);
-        toast("Looking for nearby watches…");
-        ui.postDelayed(() -> {
-            if (!active[0] || isDestroyed()) return;
+        stopScan = () -> {
+            if (active[0]) {
+                active[0] = false;
+                try { scanner.stopScan(callback); } catch (Exception ignored) { }
+            }
+        };
+        try {
+            scanner.startScan(null, new ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), callback);
+            scanState.setText("Suche läuft …");
+            picker.show();
+            ui.postDelayed(() -> {
+                if (!active[0] || isDestroyed()) return;
+                stopScan.run();
+                scanState.setText(found.isEmpty()
+                        ? "Keine BLE-Geräte gefunden – Uhr aktivieren und erneut suchen"
+                        : found.size() + " Geräte gefunden · Suche beendet");
+                if (picker.isShowing() && found.isEmpty()) {
+                    toast("Kein Gerät sichtbar. Uhr aufwecken, Nothing X trennen und erneut versuchen.");
+                }
+            }, 15000);
+        } catch (Exception ex) {
             stopScan.run();
-            var addresses = new ArrayList<>(found.keySet());
-            if (addresses.isEmpty()) { toast("No watch found. Wake it and disconnect other Bluetooth clients."); return; }
-            new AlertDialog.Builder(this).setTitle("Select your watch")
-                    .setItems(found.values().toArray(String[]::new), (dialog, which) -> {
-                        address = addresses.get(which);
-                        watch.setText(found.get(address));
-                    }).show();
-        }, 7000);
+            scanState.setText("Bluetooth-Fehler: " + ex.getMessage());
+        }
     }
 
     private void startBridge() {

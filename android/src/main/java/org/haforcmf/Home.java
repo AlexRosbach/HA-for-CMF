@@ -18,8 +18,12 @@ import java.util.Map;
 final class Home {
     record Entity(String id, String label, String state, String unit) {
         boolean switchable() { return id.startsWith("light.") || id.startsWith("switch."); }
-        boolean canSwitch() { return switchable() && ("on".equals(state) || "off".equals(state)); }
+        boolean actionable() { return id.startsWith("scene.") || id.startsWith("script.")
+                || id.startsWith("button.") || id.startsWith("input_button."); }
+        boolean canSwitch() { return (switchable() && ("on".equals(state) || "off".equals(state)))
+                || (actionable() && !"unavailable".equals(state) && !"unknown".equals(state)); }
         String display() {
+            if (actionable()) return "Run";
             return switch (state) {
                 case "on" -> "On";
                 case "off" -> "Off";
@@ -88,10 +92,16 @@ final class Home {
     }
 
     void set(Entity entity, boolean on) throws Exception {
-        if (!entity.switchable()) return;
         String domain = entity.id().substring(0, entity.id().indexOf('.'));
-        request("/api/services/" + domain + (on ? "/turn_on" : "/turn_off"),
-                new JSONObject().put("entity_id", entity.id()));
+        if (entity.actionable()) {
+            if (!on) return;
+            String service = (domain.equals("button") || domain.equals("input_button")) ? "press" : "turn_on";
+            request("/api/services/" + domain + "/" + service,
+                    new JSONObject().put("entity_id", entity.id()));
+        } else if (entity.switchable()) {
+            request("/api/services/" + domain + (on ? "/turn_on" : "/turn_off"),
+                    new JSONObject().put("entity_id", entity.id()));
+        }
     }
 
     static byte[] readBytes(InputStream input) throws IOException {
