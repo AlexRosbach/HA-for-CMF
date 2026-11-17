@@ -156,7 +156,7 @@ final class Home {
         try {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(3500);
-            connection.setReadTimeout(3500);
+            connection.setReadTimeout(path.equals("/api/conversation/process") ? 35000 : 3500);
             connection.setRequestProperty("Authorization", "Bearer " + token);
             if (body != null) {
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
