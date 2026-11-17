@@ -21,6 +21,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabi
+      - uses: astral-sh/setup-uv@v6
       - name: Build CMF watch package
         run: bash build.sh
       - name: Set up Java 17
