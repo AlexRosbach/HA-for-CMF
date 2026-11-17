@@ -14,6 +14,11 @@ const MUTED: Rgb = Rgb(156, 158, 166);
 const ORANGE: Rgb = Rgb(255, 106, 24);
 const GREEN: Rgb = Rgb(90, 220, 146);
 const CARD: Rgb = Rgb(37, 39, 44);
+const LBG: Rgb = Rgb(248, 249, 251);
+const LINK: Rgb = Rgb(16, 19, 25);
+const LMUTED: Rgb = Rgb(74, 82, 95);
+const LCARD: Rgb = Rgb(229, 234, 241);
+const LGREEN: Rgb = Rgb(12, 110, 63);
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct Tile {
@@ -42,6 +47,8 @@ struct Screen {
     room_len: usize,
     page: u8,
     pages: u8,
+    english: bool,
+    light: bool,
 }
 
 impl Screen {
@@ -74,10 +81,14 @@ impl Screen {
             let [page, total, room_len] = *message.first_chunk::<3>()?;
             let length = room_len as usize;
             if total == 0 || page >= total || length > screen.room.len()
-                    || message.len() != 3 + length {
+                    || message.len() != 4 + length {
                 return None;
             }
-            let name = &message[3..];
+            let name = &message[3..3+length];
+            let ui = message[3+length];
+            if ui & !3 != 0 { return None; }
+            screen.english = ui & 1 != 0;
+            screen.light = ui & 2 != 0;
             if !name.iter().all(|&b| (b' '..=b'~').contains(&b)) { return None; }
             screen.page = page;
             screen.pages = total;
@@ -107,11 +118,12 @@ fn big_centre(mut api: &Api, cx: i32, y: i32, value: &str,
 }
 
 fn tile_button(mut api: &Api, index: usize, title: &str, value: &str,
-        active: bool, editable: bool) {
+        active: bool, editable: bool, light: bool) {
     let (x,y)=tile_origin(index);
-    let bg=if active { ORANGE } else { CARD };
-    let ink=if active { BG } else { INK };
-    draw::rrect(&mut api,x,y,TILE_W,TILE_H,18,bg,BG);
+    let bg=if active { ORANGE } else { if light { LCARD } else { CARD } };
+    let ink=if active { LINK } else { if light { LINK } else { INK } };
+    let canvas_bg=if light { LBG } else { BG };
+    draw::rrect(&mut api,x,y,TILE_W,TILE_H,18,bg,canvas_bg);
     let (first, truncated)=text::clip(title,8);
     let rest=if truncated { &title[first.len()..] } else { "" };
     big_centre(api,x+TILE_W/2,if truncated {y+11}else{y+23},
@@ -122,11 +134,12 @@ fn tile_button(mut api: &Api, index: usize, title: &str, value: &str,
     big_centre(api,x+TILE_W/2,y+72,if editable { value } else { "--" },2,8,ink);
 }
 
-fn page_footer(mut api: &Api, index: usize, total: usize, is_search: bool) {
-    draw::rrect(&mut api, 96, 381, 93, 41, 14, CARD, BG);
-    big_centre(api, 143, 392, if is_search { "ZURUECK" } else { "SUCHE" },
+fn page_footer(mut api: &Api, index: usize, total: usize, is_search: bool, english: bool, light: bool) {
+    let (bg,ink,muted,card)=if light {(LBG,LINK,LMUTED,LCARD)}else{(BG,INK,MUTED,CARD)};
+    draw::rrect(&mut api, 96, 381, 93, 41, 14, card, bg);
+    big_centre(api, 143, 392, if is_search { if english { "BACK" } else { "ZURUECK" } } else { if english { "SEARCH" } else { "SUCHE" } },
             2,7,ORANGE);
-    big_centre(api, 211, 391, "<", 3, 1, INK);
+    big_centre(api, 211, 391, "<", 3, 1, ink);
     big_centre(api, 255, 391, ">", 3, 1, INK);
     let mut numbering=[b'0';5];
     let current=core::cmp::min(index+1,9);
@@ -135,59 +148,71 @@ fn page_footer(mut api: &Api, index: usize, total: usize, is_search: bool) {
     numbering[1]=b'/';
     numbering[2]=b'0'+max as u8;
     let label=core::str::from_utf8(&numbering[..3]).unwrap_or("1/1");
-    big_centre(api, 328, 393, label, 2, 5, MUTED);
+    big_centre(api, 328, 393, label, 2, 5, muted);
 }
 
 fn render(mut api: &Api, home: &Screen, results: &Screen, mode: Mode,
         selected: u8, waiting: Option<usize>, confirming: Option<usize>, offline: bool) {
-    api.rect(0,0,466,466,BG.rgb565());
+    let selected_screen=if mode==Mode::Results && results.pages>0 { results } else { home };
+    let english=selected_screen.english;
+    let light=selected_screen.light;
+    let (background,foreground,subtle,surface,success)=if light {
+        (LBG,LINK,LMUTED,LCARD,LGREEN)
+    }else{(BG,INK,MUTED,CARD,GREEN)};
+    api.rect(0,0,466,466,background.rgb565());
     let snapshot=home.pages>0;
-    let caption=if offline { "OFFLINE" } else if snapshot { "VERBUNDEN" }
-            else { "WARTE..." };
-    draw::rrect(&mut api, 122, 44, 222, 42, 18, CARD, BG);
+    let caption=if offline { "OFFLINE" } else if snapshot {
+                if english { "CONNECTED" } else { "VERBUNDEN" }
+            } else { if english { "WAITING..." } else { "WARTE..." } };
+    draw::rrect(&mut api, 122, 44, 222, 42, 18, surface, background);
     big_centre(api,233,54,caption,2,13,
-            if offline { ORANGE } else if snapshot { GREEN } else { MUTED });
+            if offline { ORANGE } else if snapshot { success } else { subtle });
 
     if mode==Mode::Categories {
-        big_centre(api,233,109,"SUCHE",3,9,INK);
-        let names=["LICHTER","SCHALTER","SZENEN","SENSOREN"];
+        big_centre(api,233,109,if english {"SEARCH"} else {"SUCHE"},3,9,foreground);
+        let names=if english { ["LIGHTS","SWITCHES","SCENES","SENSORS"] }
+                  else { ["LICHTER","SCHALTER","SZENEN","SENSOREN"] };
         for (i,name) in names.iter().enumerate() {
-            tile_button(api,i,name,"ANZEIGEN",false,true);
+            tile_button(api,i,name,if english{"SHOW"}else{"ANZEIGEN"},false,true,light);
         }
-        draw::rrect(&mut api,145,388,176,39,13,CARD,BG);
-        big_centre(api,233,398,"ZURUECK",2,8,ORANGE);
+        draw::rrect(&mut api,145,388,176,39,13,surface,background);
+        big_centre(api,233,398,if english{"BACK"}else{"ZURUECK"},2,8,ORANGE);
     } else {
         let is_search=mode==Mode::Results;
         let screen=if is_search { results } else { home };
         let title=core::str::from_utf8(&screen.room[..screen.room_len]).unwrap_or("");
         big_centre(api,233,109,
-                if title.is_empty() { if is_search { "SUCHE" } else { "FAVORITEN" } }
-                    else { title },3,12,INK);
+                if title.is_empty() { if is_search { if english{"SEARCH"}else{"SUCHE"} }
+                    else { if english{"FAVOURITES"}else{"FAVORITEN"} } }
+                    else { title },3,12,foreground);
         let empty=screen.tiles[..screen.count].iter().all(|t|t.title_len==0);
         if screen.count==0 || (is_search && empty) {
-            big_centre(api,233,215,if !snapshot { "LADE DATEN" }
-                    else if is_search { "KEINE TREFFER" } else { "LEERE SEITE" },3,13,INK);
+            big_centre(api,233,215,if !snapshot { if english{"LOADING"}else{"LADE DATEN"} }
+                    else if is_search { if english{"NO RESULTS"}else{"KEINE TREFFER"} }
+                    else { if english{"EMPTY PAGE"}else{"LEERE SEITE"} },3,13,foreground);
             big_centre(api,233,264,
-                    if is_search { "ANDEREN TYP WAEHLEN" } else { "AM HANDY BELEGEN" },
-                    2,20,MUTED);
+                    if is_search { if english{"CHOOSE OTHER TYPE"}else{"ANDEREN TYP WAEHLEN"} }
+                    else { if english{"EDIT ON PHONE"}else{"AM HANDY BELEGEN"} },
+                    2,20,subtle);
         } else {
             for(i,tile) in screen.tiles[..screen.count].iter().enumerate(){
                 if tile.title_len==0 {
-                    tile_button(api,i,"BELEGEN","+",false,true);
+                    tile_button(api,i,if english{"ADD"}else{"BELEGEN"},"+",false,true,light);
                     continue;
                 }
                 let active=!offline && tile.flags&2!=0;
                 let title=if confirming==Some(i) && tile.flags&4!=0 {
-                    if active { "SCHLIESSEN?" } else { "OEFFNEN?" }
+                    if active { if english{"LOCK?"}else{"SCHLIESSEN?"} }
+                    else { if english{"UNLOCK?"}else{"OEFFNEN?"} }
                 }else{tile.title()};
-                let value=if confirming==Some(i) { "NOCHMAL" }
-                    else if waiting==Some(i) { "SENDEN" }
+                let value=if confirming==Some(i) { if english{"TAP AGAIN"}else{"NOCHMAL"} }
+                    else if waiting==Some(i) { if english{"SENDING"}else{"SENDEN"} }
                     else if offline { "OFFLINE" } else { tile.value() };
-                tile_button(api,i,title,value,active,true);
+                tile_button(api,i,title,value,active,true,light);
             }
         }
         page_footer(api,screen.page as usize,
-                if screen.pages==0 {1}else{screen.pages as usize},is_search);
+                if screen.pages==0 {1}else{screen.pages as usize},is_search,english,light);
     }
     api.show();
 }

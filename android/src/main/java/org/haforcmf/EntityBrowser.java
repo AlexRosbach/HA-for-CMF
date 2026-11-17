@@ -71,12 +71,12 @@ final class EntityBrowser {
         ArrayList<Home.Entity> results=new ArrayList<>();
         String[] roomNames=new String[catalog.rooms().size()+2];
         String[] roomIds=new String[roomNames.length];
-        roomNames[0]="Alle Räume"; roomIds[0]="";
+        roomNames[0]=LocaleKit.t(a,"Alle Räume"); roomIds[0]="";
         for(int i=0;i<catalog.rooms().size();i++){
             roomNames[i+1]=catalog.rooms().get(i).name();
             roomIds[i+1]=catalog.rooms().get(i).id();
         }
-        roomNames[roomNames.length-1]="Ohne Raum";
+        roomNames[roomNames.length-1]=LocaleKit.t(a,"Ohne Raum");
         roomIds[roomIds.length-1]="__without__";
         int[] room={0}, category={0},sorting={0};
         boolean[] available={false},onlyFavorites={false};
@@ -112,8 +112,8 @@ final class EntityBrowser {
         filters.addView(filterScroll);
         LinearLayout stateRow=UiKit.row(a);
         filterScroll.addView(stateRow);
-        TextView roomButton=UiKit.chip(a,frow,"⌂  Alle Räume",false,null);
-        TextView typeButton=UiKit.chip(a,frow,"◈  Alle Typen",false,null);
+        TextView roomButton=UiKit.chip(a,frow,"⌂  "+LocaleKit.t(a,"Alle Räume"),false,null);
+        TextView typeButton=UiKit.chip(a,frow,"◈  "+LocaleKit.t(a,"Alle Typen"),false,null);
         TextView sortButton=UiKit.chip(a,stateRow,"↕  Name",false,null);
         TextView availableButton=UiKit.chip(a,stateRow,"✓  Verfügbare",false,null);
         TextView favoriteButton=UiKit.chip(a,stateRow,"♥  Favoriten",false,null);
@@ -142,7 +142,7 @@ final class EntityBrowser {
                 LinearLayout card=UiKit.row(a);
                 card.setPadding(UiKit.dp(a,12),UiKit.dp(a,10),UiKit.dp(a,12),UiKit.dp(a,10));
                 card.setBackground(UiKit.bg(a,
-                        chosen.contains(e.id()) ? UiKit.PEACH : Color.WHITE,17,UiKit.EDGE));
+                        chosen.contains(e.id()) ? UiKit.PEACH : UiKit.CARD,17,UiKit.EDGE));
                 LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(
                         UiKit.dp(a,35),UiKit.dp(a,50));
                 TextView icon=UiKit.label(a,symbol(e),25,true,UiKit.ORANGE);
@@ -203,8 +203,8 @@ final class EntityBrowser {
                 default->Comparator.comparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER);
             };
             results.sort(comparator);
-            resultCount.setText(results.size()+" Ergebnisse · "+chosen.size()+"/24 Favoriten");
-            if(saveButton[0]!=null)saveButton[0].setText("✓  "+chosen.size()+"/24 Favoriten speichern");
+            resultCount.setText(results.size()+" "+LocaleKit.t(a,"Ergebnisse")+" · "+chosen.size()+"/24 "+LocaleKit.t(a,"Favoriten"));
+            if(saveButton[0]!=null)saveButton[0].setText("✓  "+chosen.size()+"/24 "+LocaleKit.t(a,"Favoriten speichern"));
             adapter.notifyDataSetChanged();
         };
         refresh[0]=update;
@@ -212,31 +212,31 @@ final class EntityBrowser {
             toggle.accept(results.get(index));
         });
         roomButton.setOnClickListener(v->new AlertDialog.Builder(a)
-                .setTitle("Raum auswählen")
+                .setTitle(LocaleKit.t(a,"Raum auswählen"))
                 .setSingleChoiceItems(roomNames,room[0],(d,i)->{
                     room[0]=i;roomButton.setText("⌂  "+roomNames[i]);
                     d.dismiss();update.run();
-                }).setNegativeButton("Abbrechen",null).show());
+                }).setNegativeButton(LocaleKit.t(a,"Abbrechen"),null).show());
         typeButton.setOnClickListener(v->new AlertDialog.Builder(a)
-                .setTitle("Gerätetyp auswählen")
-                .setSingleChoiceItems(TYPES,category[0],(d,i)->{
-                    category[0]=i;typeButton.setText("◈  "+TYPES[i]);
+                .setTitle(LocaleKit.t(a,"Gerätetyp auswählen"))
+                .setSingleChoiceItems(java.util.Arrays.stream(TYPES).map(t->LocaleKit.t(a,t)).toArray(String[]::new),category[0],(d,i)->{
+                    category[0]=i;typeButton.setText("◈  "+LocaleKit.t(a,TYPES[i]));
                     d.dismiss();update.run();
                 }).setNegativeButton("Abbrechen",null).show());
         sortButton.setOnClickListener(v->new AlertDialog.Builder(a)
-                .setTitle("Sortieren")
-                .setSingleChoiceItems(SORT,sorting[0],(d,i)->{
-                    sorting[0]=i;sortButton.setText("↕  "+SORT[i]);
+                .setTitle(LocaleKit.t(a,"Sortieren"))
+                .setSingleChoiceItems(java.util.Arrays.stream(SORT).map(t->LocaleKit.t(a,t)).toArray(String[]::new),sorting[0],(d,i)->{
+                    sorting[0]=i;sortButton.setText("↕  "+LocaleKit.t(a,SORT[i]));
                     d.dismiss();update.run();
                 }).setNegativeButton("Abbrechen",null).show());
         availableButton.setOnClickListener(v->{
             available[0]=!available[0];
-            availableButton.setBackground(UiKit.bg(a,available[0]?UiKit.PEACH:Color.WHITE,30,UiKit.EDGE));
+            availableButton.setBackground(UiKit.bg(a,available[0]?UiKit.PEACH:UiKit.CARD,30,UiKit.EDGE));
             update.run();
         });
         favoriteButton.setOnClickListener(v->{
             onlyFavorites[0]=!onlyFavorites[0];
-            favoriteButton.setBackground(UiKit.bg(a,onlyFavorites[0]?UiKit.PEACH:Color.WHITE,30,UiKit.EDGE));
+            favoriteButton.setBackground(UiKit.bg(a,onlyFavorites[0]?UiKit.PEACH:UiKit.CARD,30,UiKit.EDGE));
             update.run();
         });
         Handler debounce=new Handler(Looper.getMainLooper());

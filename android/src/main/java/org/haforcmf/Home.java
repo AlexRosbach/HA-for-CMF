@@ -143,7 +143,7 @@ final class Home {
 
     Home(String url, String token) {
         this.base = URI.create(url.trim().replaceAll("/+$", ""));
-        if (!("http".equals(base.getScheme()) || "https".equals(base.getScheme()))
+        if (!"https".equals(base.getScheme())
                 || base.getHost() == null || base.getUserInfo() != null
                 || base.getQuery() != null || base.getFragment() != null || token.trim().isEmpty()) {
             throw new IllegalArgumentException("Enter a Home Assistant URL and access token.");

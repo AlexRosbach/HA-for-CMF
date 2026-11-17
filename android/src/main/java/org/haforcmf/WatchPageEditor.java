@@ -114,7 +114,7 @@ final class WatchPageEditor {
     private void refresh(){
         if(active>=pages.pages.size())active=pages.pages.size()-1;
         heading.setText(page().title);
-        counter.setText("Seite "+(active+1)+" von "+pages.pages.size());
+        counter.setText(LocaleKit.t(activity,"Seite "+(active+1)+" von "+pages.pages.size()));
         preview.setPage(page(),active,pages.pages.size());
         slots.removeAllViews();
         for(int i=0;i<WatchPages.SLOTS;i++){
@@ -159,18 +159,18 @@ final class WatchPageEditor {
     private void rename(){
         EditText input=entry(page().title,24);
         new AlertDialog.Builder(activity)
-                .setTitle("Seite umbenennen")
-                .setMessage("Dieser Name erscheint auch auf der Uhr.")
+                .setTitle(LocaleKit.t(activity,"Seite umbenennen"))
+                .setMessage(LocaleKit.t(activity,"Dieser Name erscheint auch auf der Uhr."))
                 .setView(input)
-                .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Speichern",(d,w)->{
+                .setNegativeButton(LocaleKit.t(activity,"Abbrechen"),null)
+                .setPositiveButton(LocaleKit.t(activity,"Speichern"),(d,w)->{
                     page().title=WatchPages.name(input.getText().toString(),"Favoriten");
                     save();
                 }).show();
     }
     private void move(){
         String[] options={"Seite nach links verschieben","Seite nach rechts verschieben"};
-        new AlertDialog.Builder(activity).setTitle("Seite verschieben")
+        new AlertDialog.Builder(activity).setTitle(LocaleKit.t(activity,"Seite verschieben"))
                 .setItems(options,(d,position)->{
                     int next=active+(position==0?-1:1);
                     if(next<0||next>=pages.pages.size())return;
@@ -179,10 +179,10 @@ final class WatchPageEditor {
                 }).show();
     }
     private void delete(){
-        new AlertDialog.Builder(activity).setTitle("Seite löschen?")
-                .setMessage("Alle Kacheln dieser Seite werden entfernt. Mindestens eine Seite bleibt bestehen.")
-                .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Löschen",(d,w)->{
+        new AlertDialog.Builder(activity).setTitle(LocaleKit.t(activity,"Seite löschen?"))
+                .setMessage(LocaleKit.t(activity,"Alle Kacheln dieser Seite werden entfernt. Mindestens eine Seite bleibt bestehen."))
+                .setNegativeButton(LocaleKit.t(activity,"Abbrechen"),null)
+                .setPositiveButton(LocaleKit.t(activity,"Löschen"),(d,w)->{
                     pages.deletePage(active);
                     active=Math.min(active,pages.pages.size()-1);
                     save();
@@ -192,7 +192,7 @@ final class WatchPageEditor {
         String id=page().ids[slot];
         if(id.isBlank()){pick(slot);return;}
         new AlertDialog.Builder(activity).setTitle(displayName(slot))
-                .setItems(new String[]{"Entität ändern","Kurzname ändern (Uhr)","Kachel leeren"},
+                .setItems(new String[]{LocaleKit.t(activity,"Entität ändern"),LocaleKit.t(activity,"Kurzname ändern (Uhr)"),LocaleKit.t(activity,"Kachel leeren")},
                     (d,selection)->{
                         if(selection==0)pick(slot);
                         else if(selection==1)alias(slot);
@@ -201,16 +201,16 @@ final class WatchPageEditor {
                             page().labels[slot]="";
                             save();
                         }
-                    }).setNegativeButton("Abbrechen",null).show();
+                    }).setNegativeButton(LocaleKit.t(activity,"Abbrechen"),null).show();
     }
     private void alias(int slot){
         String existing=page().labels[slot];
         EditText input=entry(existing.isBlank()?displayName(slot):existing,10);
-        new AlertDialog.Builder(activity).setTitle("Kurzname für die Uhr")
-                .setMessage("Maximal zehn Zeichen. Kurze Namen verhindern abgeschnittene Kacheln.")
+        new AlertDialog.Builder(activity).setTitle(LocaleKit.t(activity,"Kurzname für die Uhr"))
+                .setMessage(LocaleKit.t(activity,"Maximal zehn Zeichen. Kurze Namen verhindern abgeschnittene Kacheln."))
                 .setView(input)
-                .setNegativeButton("Abbrechen",null)
-                .setPositiveButton("Speichern",(d,w)->{
+                .setNegativeButton(LocaleKit.t(activity,"Abbrechen"),null)
+                .setPositiveButton(LocaleKit.t(activity,"Speichern"),(d,w)->{
                     page().labels[slot]=WatchPages.name(input.getText().toString(),"");
                     save();
                 }).show();
@@ -267,7 +267,7 @@ final class WatchPageEditor {
                 if(results.size()>=250)break;
             }
             results.sort(Comparator.comparing(Home.Entity::label,String.CASE_INSENSITIVE_ORDER));
-            info.setText(results.size()+" Treffer · Entität wählen");
+            info.setText(results.size()+" "+LocaleKit.t(activity,"Treffer")+" · "+LocaleKit.t(activity,"Entität auswählen"));
             adapter.notifyDataSetChanged();
         };
         list.setOnItemClickListener((parent,view,position,id)->{

@@ -1,0 +1,183 @@
+package org.haforcmf;
+
+import android.content.Context;
+import android.content.res.Configuration;
+import java.util.HashMap;
+import java.util.Map;
+
+/** Small self-contained DE/EN dictionary for the no-Gradle Java Android UI. */
+final class LocaleKit {
+    private static final Map<String,String> EN = new HashMap<>();
+    private static void add(String german,String english){EN.put(german,english);}
+    static {
+        add("Räume & Geräte","Rooms & devices");
+        add("Dein Zuhause. Wähle einen Raum und steuere die Geräte.","Your home. Select a room to control its devices.");
+        add("RAUM AUSWÄHLEN","SELECT ROOM");
+        add("Alle Räume","All rooms");
+        add("Ohne Raum","No room");
+        add("Räume und Status aktualisieren","Refresh rooms & status");
+        add("↻  Räume und Status aktualisieren","↻  Refresh rooms & status");
+        add("⌕  Alle Entitäten durchsuchen","⌕  Browse all entities");
+        add("Alle Entitäten durchsuchen","Browse all entities");
+        add("Entitäten-Browser","Entity browser");
+        add("Alle Geräte, Sensoren, Szenen und Schlösser übersichtlich.","Browse devices, sensors, scenes and locks.");
+        add("♥  Favoriten für die Uhr","♥  Watch favourites");
+        add("Favoriten für die Uhr","Watch favourites");
+        add("Noch keine Favoriten ausgewählt","No favourites selected");
+        add("Keine Favoriten ausgewählt","No favourites selected");
+        add("Filtere nach Raum, Gerätetyp, Status und Favoriten. Du kannst bis zu 24 Einträge für die Uhr festlegen.","Filter by room, type, status and favourites. You can select up to 24 watch items.");
+        add("Uhr verbinden","Connect watch");
+        add("Deine CMF Watch Pro 2 einrichten.","Set up your CMF Watch Pro 2.");
+        add("Noch keine Uhr ausgewählt","No watch selected");
+        add("Bluetooth-Suche bereit","Ready to scan for Bluetooth devices");
+        add("⌕  Uhr suchen","⌕  Find watch");
+        add("Uhr aufwecken. Gegebenenfalls Nothing X vorübergehend trennen.","Wake your watch. Disconnect Nothing X temporarily if needed.");
+        add("Uhr-App & Bridge","Watch app & bridge");
+        add("Installieren, synchronisieren und Verbindung prüfen.","Install, sync and check connection.");
+        add("Uhr-App installieren / aktualisieren","Install / update watch app");
+        add("Bridge starten","Start bridge");
+        add("Bridge stoppen","Stop bridge");
+        add("Home Assistant verbinden","Connect Home Assistant");
+        add("Verbindung zu deiner Home-Assistant-Instanz.","Connect to your Home Assistant instance.");
+        add("Home Assistant URL","Home Assistant URL");
+        add("Zugriffstoken","Access token");
+        add("Verbindung testen und Räume laden","Test connection & load rooms");
+        add("Token in Home Assistant → Profil → Sicherheit → Langlebige Zugriffstoken erstellen.","Create a long-lived access token in Home Assistant → Profile → Security.");
+        add("Sicherheit","Security");
+        add("Türöffner und Schlösser werden nur nach Bestätigung auf dem Handy ausgeführt.","Locks and door openers require confirmation on your phone.");
+        add("✓  Entriegeln und Tür öffnen erfordern eine ausdrückliche Bestätigung mit vollständigem Schlossnamen. Der Watch-Bridge-Befehl allein öffnet keine Tür.","✓  Unlocking and opening require confirmation on the phone. Watch Bluetooth commands alone never open a door.");
+        add("Zuhause","Home");
+        add("Entitäten","Entities");
+        add("Uhr","Watch");
+        add("Einstellungen","Settings");
+        add("⌂\nZuhause","⌂\nHome");
+        add("⌕\nEntitäten","⌕\nEntities");
+        add("◉\nUhr","◉\nWatch");
+        add("⚙\nEinstellungen","⚙\nSettings");
+        add("HA for CMF","HA for CMF");
+        add("Los geht's  →","Get started  →");
+        add("Home Assistant auf deiner CMF Watch Pro 2","Home Assistant on your CMF Watch Pro 2");
+        add("Favoritenseiten in der Vorschau bearbeiten.","Edit favourite pages in the preview.");
+        add("Uhr-Oberfläche gestalten","Customize watch screen");
+        add("Seiten und Kacheln direkt in der Vorschau bearbeiten.","Edit pages and tiles directly in the preview.");
+        add("Tippe in der Vorschau auf eine Kachel, um sie zu belegen.","Tap a tile in the preview to assign a device.");
+        add("+  Neue Favoritenseite","+  New favourite page");
+        add("Umbenennen","Rename");
+        add("Verschieben","Move");
+        add("Löschen","Delete");
+        add("✓  Seiten speichern & an Uhr senden","✓  Save pages & sync to watch");
+        add("Gespeichert. Die Uhr lädt die Seiten neu.","Saved. Your watch will reload its pages.");
+        add("Maximal sechs Seiten möglich.","Maximum six pages.");
+        add("Bearbeiten ›","Edit ›");
+        add("Nicht belegt","Empty");
+        add("Seite umbenennen","Rename page");
+        add("Dieser Name erscheint auch auf der Uhr.","This name also appears on your watch.");
+        add("Abbrechen","Cancel");
+        add("Speichern","Save");
+        add("Seite verschieben","Move page");
+        add("Seite nach links verschieben","Move page left");
+        add("Seite nach rechts verschieben","Move page right");
+        add("Seite löschen?","Delete page?");
+        add("Alle Kacheln dieser Seite werden entfernt. Mindestens eine Seite bleibt bestehen.","All tiles on this page will be removed. At least one page remains.");
+        add("Entität ändern","Change entity");
+        add("Kurzname ändern (Uhr)","Change watch label");
+        add("Kachel leeren","Clear tile");
+        add("Kurzname für die Uhr","Watch short label");
+        add("Maximal zehn Zeichen. Kurze Namen verhindern abgeschnittene Kacheln.","Up to ten characters. Short names prevent clipped tiles.");
+        add("Kachel","Tile");
+        add("Kachel belegen","Assign tile");
+        add("Entität auswählen","Select entity");
+        add("Gerät, Entität oder Raum suchen","Search device, entity or room");
+        add("Tippe auf einen Eintrag","Tap an item");
+        add("Entitäten konnten nicht geladen werden: ","Could not load entities: ");
+        add("Entität wählen","Choose entity");
+        add("Kachel leeren","Clear tile");
+        add("Favoriten auf","favourites on");
+        add("Bitte zuerst Home Assistant verbinden.","Connect Home Assistant first.");
+        add("Entität, Gerät oder Raum suchen","Search entity, device or room");
+        add("Suchen · Filtern · Zur Uhr hinzufügen","Search · Filter · Add to watch");
+        add("Alle Typen","All types");
+        add("Lichter","Lights");
+        add("Schalter","Switches");
+        add("Schlösser","Locks");
+        add("Szenen","Scenes");
+        add("Skripte","Scripts");
+        add("Buttons","Buttons");
+        add("Sensoren","Sensors");
+        add("Weitere","Other");
+        add("Name (A–Z)","Name (A–Z)");
+        add("Raum (A–Z)","Room (A–Z)");
+        add("Typ","Type");
+        add("Status","Status");
+        add("Raum auswählen","Choose room");
+        add("Gerätetyp auswählen","Choose device type");
+        add("Sortieren","Sort");
+        add("Favoriten","Favourites");
+        add("Verfügbare","Available");
+        add("Ergebnisse","Results");
+        add("Treffer","Results");
+        add("Favoriten speichern","Save favourites");
+        add("⌂  Alle Räume","⌂  All rooms");
+        add("◈  Alle Typen","◈  All types");
+        add("↕  Name","↕  Name");
+        add("✓  Verfügbare","✓  Available");
+        add("♥  Favoriten","♥  Favourites");
+        add("Maximal 24 Favoriten möglich.","Maximum 24 favourites.");
+        add("Entitäten laden","Loading entities");
+        add("Schlossaktion von Uhr bestätigen?","Confirm watch lock action?");
+        add("Schloss entriegeln?","Unlock the lock?");
+        add("Schloss verriegeln?","Lock the lock?");
+        add("Ja, entriegeln","Yes, unlock");
+        add("Ja, verriegeln","Yes, lock");
+        add("Ja, Tür öffnen","Yes, open door");
+        add("Schloss entsperren …","Unlock lock …");
+        add("Schloss verriegeln …","Lock lock …");
+        add("Tür öffnen (Schnapper) …","Open door (latch) …");
+        add("Tür wirklich öffnen?","Open the door?");
+        add("Räume laden, um Geräte anzuzeigen.","Load rooms to show devices.");
+        add("Bitte zuerst URL und Token eingeben.","Enter URL and token first.");
+        add("Wähle einen Raum aus, oder füge Favoriten über den Entitäten-Browser hinzu.","Select a room or add favourites in the entity browser.");
+        add("Einschalten","Turn on");
+        add("Ausschalten","Turn off");
+        add("Ausführen","Run");
+        add("Helligkeit","Brightness");
+        add("Helligkeit angepasst","Brightness updated");
+        add("Offline","Offline");
+        add("Verbunden","Connected");
+        add("Lade Räume und Geräte …","Loading rooms and devices …");
+        add("Räume und Geräte aktualisieren","Refresh rooms and devices");
+        add("Schließen","Close");
+        add("Uhr-Favoriten","Watch favourites");
+        add("Bitte zuerst die Uhr auswählen.","Select your watch first.");
+        add("Verbindung testen","Test connection");
+        add("Sprache & Darstellung","Language & appearance");
+        add("Sprache","Language");
+        add("Design","Theme");
+        add("Deutsch","German");
+        add("Englisch","English");
+        add("System","System");
+        add("Hell","Light");
+        add("Dunkel","Dark");
+        add("Für Handy und Uhr. Die Ansicht wird nach der Auswahl neu geladen.","For phone and watch. The screen reloads after selection.");
+        add("Darstellung aktualisiert","Appearance updated");
+    }
+    static boolean english(Context context) {
+        return "en".equals(SettingsStore.load(context,"language"));
+    }
+    static String t(Context context,String german) {
+        if(german==null || !english(context))return german;
+        String exact=EN.get(german);
+        if(exact!=null)return exact;
+        // A few UI labels include dynamic counts or page indices.
+        if(german.matches("\\d+ Favoriten.*"))return german.replace("Favoriten","favourites").replace("Seiten","pages");
+        if(german.startsWith("Seite ")){
+            return german.replace("Seite ","Page ").replace(" von "," of ");
+        }
+        if(german.startsWith("Kachel ")){
+            return german.replace("Kachel ","Tile ").replace("Nicht belegt","Empty");
+        }
+        if(german.startsWith("Gespeicherte Uhr: "))return german.replace("Gespeicherte Uhr: ","Saved watch: ");
+        if(german.startsWith("Bitte zuerst"))return german.replace("Bitte zuerst","First");
+        return german;
+    }
+}
