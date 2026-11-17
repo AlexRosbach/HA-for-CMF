@@ -118,11 +118,14 @@ fn render(mut api: &Api, screen: &Screen,
     for (index, tile) in screen.tiles[..screen.count].iter().enumerate() {
         let (x, y) = tile_origin(index, screen.count);
         let lit = !offline && tile.flags & 2 != 0;
-        let locked = tile.flags & 4 != 0;
+
         let fill = if lit { ORANGE } else { CARD };
         let foreground = if lit { BG } else { INK };
         draw::rrect(&mut api, x, y, TILE_W, TILE_H, 21, fill, BG);
-        text::centre(&mut api, x + TILE_W / 2, y + 20, tile.title(), foreground.rgb565());
+        let title = if confirmation == Some(index) && tile.flags & 4 != 0 {
+            if tile.flags & 2 == 0 { "UNLOCK?" } else { "LOCK?" }
+        } else { tile.title() };
+        text::centre(&mut api, x + TILE_W / 2, y + 20, title, foreground.rgb565());
         let value = if offline { "Offline" }
             else if confirmation == Some(index) { "TAP AGAIN" }
             else if waiting == Some(index) { "Updating..." }
