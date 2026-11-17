@@ -110,6 +110,7 @@ final class WatchPageEditor {
         refresh();
     }
     private WatchPages.Page page(){return pages.pages.get(active);}
+    void refreshFromConfig(){refresh();}
     private void refresh(){
         if(active>=pages.pages.size())active=pages.pages.size()-1;
         heading.setText(page().title);
