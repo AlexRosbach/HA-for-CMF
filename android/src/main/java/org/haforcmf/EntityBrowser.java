@@ -102,10 +102,16 @@ final class EntityBrowser {
         search.setSingleLine(true);
         LinearLayout filters=UiKit.column(a);
         root.addView(filters);
+        HorizontalScrollView roomScroll=new HorizontalScrollView(a);
+        roomScroll.setHorizontalScrollBarEnabled(false);
+        filters.addView(roomScroll);
         LinearLayout frow=UiKit.row(a);
-        filters.addView(frow);
+        roomScroll.addView(frow);
+        HorizontalScrollView filterScroll=new HorizontalScrollView(a);
+        filterScroll.setHorizontalScrollBarEnabled(false);
+        filters.addView(filterScroll);
         LinearLayout stateRow=UiKit.row(a);
-        filters.addView(stateRow);
+        filterScroll.addView(stateRow);
         TextView roomButton=UiKit.chip(a,frow,"⌂  Alle Räume",false,null);
         TextView typeButton=UiKit.chip(a,frow,"◈  Alle Typen",false,null);
         TextView sortButton=UiKit.chip(a,stateRow,"↕  Name",false,null);
@@ -118,6 +124,7 @@ final class EntityBrowser {
         list.setBackgroundColor(UiKit.BG);
         root.addView(list,new LinearLayout.LayoutParams(-1,0,1));
 
+        final Button[] saveButton={null};
         ArrayAdapter<Home.Entity> adapter=new ArrayAdapter<>(a,0,results){
             @Override public View getView(int position,View recycled,ViewGroup parent){
                 Home.Entity e=getItem(position);
@@ -175,6 +182,7 @@ final class EntityBrowser {
             };
             results.sort(comparator);
             resultCount.setText(results.size()+" Ergebnisse · "+chosen.size()+"/24 Favoriten");
+            if(saveButton[0]!=null)saveButton[0].setText("✓  "+chosen.size()+"/24 Favoriten speichern");
             adapter.notifyDataSetChanged();
         };
         list.setOnItemClickListener((parent,view,index,id)->{
@@ -231,11 +239,10 @@ final class EntityBrowser {
         root.addView(footer);
         LinearLayout buttons=UiKit.column(a);
         footer.addView(buttons,new LinearLayout.LayoutParams(-1,-2));
-        UiKit.button(a,buttons,"✓  "+chosen.size()+"/24 Favoriten speichern",true,()->{
+        saveButton[0]=UiKit.button(a,buttons,"✓  "+chosen.size()+"/24 Favoriten speichern",true,()->{
             save.accept(chosen);
             dialog.dismiss();
         });
-        // Refresh button label as selection changes is not required for action correctness.
         update.run();
         Window window=dialog.getWindow();
         if(window!=null){
