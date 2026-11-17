@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use cmf_wp2_app::{Api, BUTTON, CROWN, MSG_MAX, PAUSE, RESUME, TOUCH_DOWN};
+use cmf_wp2_app::{Api, BUTTON, CROWN, MSG_MAX, PAUSE, RESUME, TOUCH_DOWN, TOUCH_UP};
 use cmf_wp2_ui::{Rgb, draw, text};
 
 cmf_wp2_app::entry!(main);
@@ -88,336 +88,269 @@ impl Screen {
     }
 }
 
-const TILE_W: i32 = 174;
-const TILE_H: i32 = 107;
+const TILE_W: i32 = 146;
+const TILE_H: i32 = 99;
 
-fn tile_origin(index: usize, count: usize) -> (i32, i32) {
-    let row = index / 2;
-    let centered = count == 1 || (count == 3 && index == 2);
-    let x = if centered { 146 } else { 51 + (index % 2) as i32 * 190 };
-    let y = if count < 3 { 193 } else { 149 + row as i32 * 114 };
-    (x, y)
+fn tile_origin(index: usize) -> (i32, i32) {
+    (if index % 2 == 0 { 75 } else { 245 },
+     if index < 2 { 152 } else { 265 })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Mode { Home, Search, Assistant }
+enum Mode { Home, Categories, Results }
 
-const LETTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
-const INPUT_MAX: usize = 16;
-
-fn send_word(api: &Api, command: u8, query: &[u8; INPUT_MAX], len: usize) -> i32 {
-    let mut data = [0u8; 4 + INPUT_MAX];
-    data[..3].copy_from_slice(b"ha2");
-    data[3] = command;
-    data[4..4 + len].copy_from_slice(&query[..len]);
-    api.send(&data[..4 + len])
-}
-
-fn display_word<'a>(buffer: &'a [u8; INPUT_MAX], len: usize) -> &'a str {
-    core::str::from_utf8(&buffer[..len]).unwrap_or("")
-}
-
-// The stock WP2 16-pixel font is too small on the round display. Use the
-// SDK's scaled 8x8 font and never place buttons in the screen's clipped corners.
-fn large_centre(mut api: &Api, cx: i32, y: i32, value: &str,
+fn big_centre(mut api: &Api, cx: i32, y: i32, value: &str,
         scale: i32, max_chars: usize, color: Rgb) {
-    let (shown, _) = text::clip(value, max_chars);
-    let width = text::big_width(shown, scale);
-    text::big(&mut api, cx - width / 2, y, shown, scale, color.rgb565());
+    let (part, _) = text::clip(value, max_chars);
+    text::big(&mut api, cx - text::big_width(part, scale) / 2,
+            y, part, scale, color.rgb565());
 }
 
-fn render(mut api: &Api, screen: &Screen, results: &Screen,
-        mode: Mode, query: &[u8; INPUT_MAX], query_len: usize,
-        letter: usize, answer: &[u8; 96], answer_len: usize,
-        pending: Option<usize>, confirmation: Option<usize>, offline: bool) {
-    api.rect(0, 0, 466, 466, BG.rgb565());
-    let has_snapshot = screen.pages != 0 || results.pages != 0;
-    let (state, state_color) = if offline { ("OFFLINE", ORANGE) }
-        else if !has_snapshot { ("WARTE AUF HANDY", MUTED) }
-        else { ("VERBUNDEN", GREEN) };
-    // Top bar is inside the circular safe area.
-    draw::rrect(&mut api, 100, 42, 266, 44, 18, CARD, BG);
-    large_centre(api, 233, 55, state, 2, 16, state_color);
+fn tile_button(mut api: &Api, index: usize, title: &str, value: &str,
+        active: bool, editable: bool) {
+    let (x,y)=tile_origin(index);
+    let bg=if active { ORANGE } else { CARD };
+    let ink=if active { BG } else { INK };
+    draw::rrect(&mut api,x,y,TILE_W,TILE_H,18,bg,BG);
+    let (first, truncated)=text::clip(title,8);
+    let rest=if truncated { &title[first.len()..] } else { "" };
+    big_centre(api,x+TILE_W/2,if truncated {y+11}else{y+23},
+            first,2,8,ink);
+    if truncated {
+        big_centre(api,x+TILE_W/2,y+32,rest,2,8,ink);
+    }
+    big_centre(api,x+TILE_W/2,y+72,if editable { value } else { "--" },2,8,ink);
+}
 
-    if mode == Mode::Home {
-        let room = core::str::from_utf8(&screen.room[..screen.room_len]).unwrap_or("");
-        let title = if room.is_empty() { "FAVORITEN" } else { room };
-        large_centre(api, 233, 107, title, 3, 12, INK);
-        if screen.count == 0 {
-            let main = if !has_snapshot { "KEINE DATEN" } else { "0 FAVORITEN" };
-            large_centre(api, 233, 224, main, 3, 14, INK);
-            large_centre(api, 233, 268,
-                    if has_snapshot { "AM HANDY AUSWAEHLEN" }
-                    else { "BRIDGE STARTEN" }, 2, 22, MUTED);
+fn page_footer(mut api: &Api, index: usize, total: usize, is_search: bool) {
+    draw::rrect(&mut api, 96, 381, 93, 41, 14, CARD, BG);
+    big_centre(api, 143, 392, if is_search { "ZURUECK" } else { "SUCHE" },
+            2,7,ORANGE);
+    big_centre(api, 211, 391, "<", 3, 1, INK);
+    big_centre(api, 255, 391, ">", 3, 1, INK);
+    let mut numbering=[b'0';5];
+    let current=core::cmp::min(index+1,9);
+    let max=core::cmp::min(total,9);
+    numbering[0]=b'0'+current as u8;
+    numbering[1]=b'/';
+    numbering[2]=b'0'+max as u8;
+    let label=core::str::from_utf8(&numbering[..3]).unwrap_or("1/1");
+    big_centre(api, 328, 393, label, 2, 5, MUTED);
+}
+
+fn render(mut api: &Api, home: &Screen, results: &Screen, mode: Mode,
+        selected: u8, waiting: Option<usize>, confirming: Option<usize>, offline: bool) {
+    api.rect(0,0,466,466,BG.rgb565());
+    let snapshot=home.pages>0;
+    let caption=if offline { "OFFLINE" } else if snapshot { "VERBUNDEN" }
+            else { "WARTE..." };
+    draw::rrect(&mut api, 122, 44, 222, 42, 18, CARD, BG);
+    big_centre(api,233,54,caption,2,13,
+            if offline { ORANGE } else if snapshot { GREEN } else { MUTED });
+
+    if mode==Mode::Categories {
+        big_centre(api,233,109,"SUCHE",3,9,INK);
+        let names=["LICHTER","SCHALTER","SZENEN","SENSOREN"];
+        for (i,name) in names.iter().enumerate() {
+            tile_button(api,i,name,"ANZEIGEN",false,true);
         }
-        for (index, tile) in screen.tiles[..screen.count].iter().enumerate() {
-            let (x, y) = tile_origin(index, screen.count);
-            let on = !offline && tile.flags & 2 != 0 && confirmation != Some(index);
-            let fill = if on { ORANGE } else { CARD };
-            let ink = if on { BG } else { INK };
-            draw::rrect(&mut api, x, y, TILE_W, TILE_H, 20, fill, BG);
-            let title = if confirmation == Some(index) {
-                if tile.flags & 2 == 0 { "ENTSPERREN?" } else { "VERRIEGELN?" }
-            } else { tile.title() };
-            let (line, cut) = text::clip(title, 7);
-            large_centre(api, x + TILE_W / 2,
-                    if cut { y + 9 } else { y + 25 }, line, 3, 7, ink);
-            if cut {
-                let rest = &title[line.len()..];
-                large_centre(api, x + TILE_W / 2, y + 38, rest, 3, 7, ink);
-            }
-            let value = if confirmation == Some(index) { "NOCHMAL" }
-                else if pending == Some(index) { "SENDEN..." }
-                else if offline { "OFFLINE" } else { tile.value() };
-            large_centre(api, x + TILE_W / 2, y + 79, value, 2, 10,
-                    if confirmation == Some(index) { ORANGE } else { ink });
-        }
-        // Bottom navigation at y=380, not in the clipped bottom corners.
-        draw::rrect(&mut api, 98, 379, 91, 39, 15, CARD, BG);
-        draw::rrect(&mut api, 279, 379, 91, 39, 15, CARD, BG);
-        large_centre(api, 143, 390, "SUCHE", 2, 5, ORANGE);
-        large_centre(api, 216, 389, "<", 3, 1, INK);
-        large_centre(api, 255, 389, ">", 3, 1, INK);
-        large_centre(api, 325, 390, "ASSIST", 2, 6, ORANGE);
+        draw::rrect(&mut api,145,388,176,39,13,CARD,BG);
+        big_centre(api,233,398,"ZURUECK",2,8,ORANGE);
     } else {
-        let searching = mode == Mode::Search;
-        large_centre(api, 233, 103,
-                if searching { "SUCHE" } else { "ASSISTENT" }, 3, 10, INK);
-        large_centre(api, 114, 104, "<", 2, 1, ORANGE);
-        draw::rrect(&mut api, 62, 144, 342, 46, 16, CARD, BG);
-        let query_text = display_word(query, query_len);
-        large_centre(api, 233, 155, if query_len == 0 { "TEXT EINGEBEN" }
-                else { query_text }, 2, 17, INK);
-        large_centre(api, 233, 204, "KRONE DREHEN", 2, 16, MUTED);
-        draw::rrect(&mut api, 74, 230, 149, 47, 17, ORANGE, BG);
-        draw::rrect(&mut api, 244, 230, 149, 47, 17, CARD, BG);
-        let selected = core::str::from_utf8(&LETTERS[letter..letter + 1]).unwrap_or("A");
-        large_centre(api, 149, 241, selected, 3, 1, BG);
-        large_centre(api, 318, 245, "LOESCHEN", 2, 9, INK);
-        if searching {
-            let count = core::cmp::min(results.count, 3);
-            for i in 0..count {
-                let tile = &results.tiles[i];
-                let y = 287 + i as i32 * 31;
-                draw::rrect(&mut api, 75, y, 316, 29, 10, CARD, BG);
-                large_centre(api, 233, y + 6, tile.title(), 2, 10, INK);
-            }
-            if count == 0 {
-                large_centre(api, 233, 305,
-                        if !has_snapshot { "WARTEN..." } else { "KEINE TREFFER" },
-                        2, 16, MUTED);
-            }
-        } else {
-            let response = core::str::from_utf8(&answer[..answer_len]).unwrap_or("");
-            if answer_len == 0 {
-                large_centre(api, 233, 315, "TEXT ODER HANDY", 2, 16, MUTED);
-            } else {
-                let bytes = response.as_bytes();
-                for i in 0..3 {
-                    let first = i * 20;
-                    if first >= bytes.len() { break; }
-                    let end = core::cmp::min(first + 20, bytes.len());
-                    if let Ok(line) = core::str::from_utf8(&bytes[first..end]) {
-                        large_centre(api, 233, 287 + i as i32 * 27, line, 2, 20, INK);
-                    }
-                }
+        let is_search=mode==Mode::Results;
+        let screen=if is_search { results } else { home };
+        let title=core::str::from_utf8(&screen.room[..screen.room_len]).unwrap_or("");
+        big_centre(api,233,109,
+                if title.is_empty() { if is_search { "SUCHE" } else { "FAVORITEN" } }
+                    else { title },3,12,INK);
+        let empty=screen.tiles[..screen.count].iter()
+                .all(|t|t.title_len==0);
+        if empty {
+            big_centre(api,233,215,if !snapshot { "LADE DATEN" }
+                    else if is_search { "KEINE TREFFER" } else { "LEERE SEITE" },3,13,INK);
+            big_centre(api,233,264,
+                    if is_search { "ANDEREN TYP WAEHLEN" } else { "AM HANDY BELEGEN" },
+                    2,20,MUTED);
+        }else{
+            for(i,tile) in screen.tiles[..screen.count].iter().enumerate(){
+                if tile.title_len==0 {continue;}
+                let active=!offline && tile.flags&2!=0;
+                let title=if confirming==Some(i) && tile.flags&4!=0 {
+                    if active { "SCHLIESSEN?" } else { "OEFFNEN?" }
+                }else{tile.title()};
+                let value=if confirming==Some(i) { "NOCHMAL" }
+                    else if waiting==Some(i) { "SENDEN" }
+                    else if offline { "OFFLINE" } else { tile.value() };
+                tile_button(api,i,title,value,active,true);
             }
         }
-        draw::rrect(&mut api, 96, 386, 122, 32, 13, CARD, BG);
-        draw::rrect(&mut api, 248, 386, 122, 32, 13, ORANGE, BG);
-        large_centre(api, 157, 395,
-                if searching { "ZURUECK" } else { "HANDY" }, 2, 8, INK);
-        large_centre(api, 309, 395,
-                if searching { "SUCHE" } else { "FRAGEN" }, 2, 7, BG);
+        page_footer(api,screen.page as usize,
+                if screen.pages==0 {1}else{screen.pages as usize},is_search);
     }
     api.show();
 }
 
+fn send_page(api: &Api, next: bool) {
+    let _=api.send(if next { b"ha2N" } else { b"ha2P" });
+}
+
+fn handle_tap(api: &Api, x: i32, y: i32, mode: &mut Mode,
+        home: &Screen, results: &Screen, selected: &mut u8,
+        waiting: &mut Option<usize>, confirming: &mut Option<usize>,
+        confirmed_at: &mut u32, now: u32) -> bool {
+    if *mode==Mode::Categories {
+        if y>=375 {
+            *mode=Mode::Home;
+            let _=api.send(b"ha2H");
+            return true;
+        }
+        for i in 0..4 {
+            let (tx,ty)=tile_origin(i);
+            if (tx..tx+TILE_W).contains(&x) && (ty..ty+TILE_H).contains(&y) {
+                *selected=match i {0=>b'L',1=>b'S',2=>b'C',_=>b'T'};
+                *mode=Mode::Results;
+                let _=api.send(&[b'h',b'a',b'2',b'Q',*selected]);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if y>=376 {
+        if x>=94 && x<=191 {
+            if *mode==Mode::Results {
+                *mode=Mode::Categories;
+                *confirming=None;
+                return true;
+            }
+            *mode=Mode::Categories;
+            return true;
+        }
+        if x>=195 && x<=235 {send_page(api,false);return false;}
+        if x>=235 && x<=279 {send_page(api,true);return false;}
+        return false;
+    }
+    let screen=if *mode==Mode::Results {results} else {home};
+    for i in 0..screen.count {
+        let (tx,ty)=tile_origin(i);
+        if !(tx..tx+TILE_W).contains(&x) || !(ty..ty+TILE_H).contains(&y){
+            continue;
+        }
+        let tile=screen.tiles[i];
+        if tile.flags&1==0 {return false;}
+        if tile.flags&4!=0 && (*confirming!=Some(i) ||
+                now.wrapping_sub(*confirmed_at)>5000) {
+            *confirming=Some(i);
+            *confirmed_at=now;
+            return true;
+        }
+        *confirming=None;
+        let action=if tile.flags&2==0 {b'U'} else {b'D'};
+        if api.send(&[b'h',b'a',b'2',action,i as u8])==0 {
+            *waiting=Some(i);
+            return true;
+        }
+        return false;
+    }
+    false
+}
+
 fn main(api: &'static Api) -> i32 {
-    let mut screen=Screen::default();
+    let mut home=Screen::default();
     let mut results=Screen::default();
     let mut mode=Mode::Home;
-    let mut query=[0u8; INPUT_MAX];
-    let mut query_len=0usize;
-    let mut letter=0usize;
-    let mut answer=[0u8;96];
-    let mut answer_len=0usize;
-    let mut pending=None;
-    let mut confirmation:Option<usize>=None;
+    let mut selected=b'L';
+    let mut waiting=None;
+    let mut confirming=None;
     let mut confirmed_at=api.now();
-    let mut received=api.now();
+    let mut last_data=api.now();
     let mut next_poll=api.now();
+    let mut last_turn=api.now().wrapping_sub(350);
+    let mut last_render=api.now();
+    let mut down:Option<(i32,i32)>=None;
     let mut offline=false;
     let mut paused=false;
-    let mut message=[0u8; MSG_MAX];
-    render(api,&screen,&results,mode,&query,query_len,letter,&answer,answer_len,
-            pending,confirmation,offline);
+    let mut inbox=[0u8;MSG_MAX];
+    render(api,&home,&results,mode,selected,waiting,confirming,offline);
+
     loop {
-        let event=api.event(if paused { u32::MAX } else { 250 });
+        let event=api.event(if paused {u32::MAX}else{200});
         let now=api.now();
         let mut redraw=false;
         if let Some(event)=event {
             match event.kind {
-                BUTTON => return 0,
-                PAUSE => paused=true,
-                RESUME => {
-                    paused=false;
-                    pending=None;
-                    confirmation=None;
-                    offline=false;
-                    received=now;
-                    next_poll=now;
+                BUTTON=>return 0,
+                PAUSE=>paused=true,
+                RESUME=>{
+                    paused=false;offline=false;
+                    waiting=None;confirming=None;
+                    last_data=now;next_poll=now;
                     redraw=true;
-                }
-                CROWN if !paused && mode != Mode::Home => {
-                    letter = if event.delta > 0 { (letter+1)%LETTERS.len() }
-                        else { (letter+LETTERS.len()-1)%LETTERS.len() };
-                    redraw=true;
-                }
-                TOUCH_DOWN if !paused && pending.is_none() => {
-                    let x=event.x as i32;
-                    let y=event.y as i32;
-                    if mode==Mode::Home {
-                        if y >= 375 {
-                            if x < 130 {
-                                mode=Mode::Search;
-                                query_len=0;
-                                answer_len=0;
-                                results=Screen::default();
-                                send_word(api,b'Q',&query,0);
-                            } else if x < 230 {
-                                api.send(b"ha2P");
-                            } else if x < 322 {
-                                api.send(b"ha2N");
-                            } else {
-                                mode=Mode::Assistant;
-                                query_len=0;
-                                answer_len=0;
-                            }
-                            redraw=true;
-                        } else if !offline {
-                            for (i,tile) in screen.tiles[..screen.count].iter().enumerate() {
-                                let (tx,ty)=tile_origin(i,screen.count);
-                                if tile.flags & 1 == 0 ||
-                                    !(tx..tx+TILE_W).contains(&x) ||
-                                    !(ty..ty+TILE_H).contains(&y) { continue; }
-                                if tile.flags & 4 != 0 &&
-                                    (confirmation!=Some(i) || now.wrapping_sub(confirmed_at)>5000) {
-                                    confirmation=Some(i);
-                                    confirmed_at=now;
-                                    redraw=true;
-                                    break;
-                                }
-                                confirmation=None;
-                                let action=if tile.flags & 2 == 0 { b'U' } else { b'D' };
-                                if api.send(&[b'h',b'a',b'2',action,i as u8])==0 {
-                                    pending=Some(i);
-                                    received=now;
-                                } else { offline=true; }
-                                redraw=true;
-                                break;
-                            }
-                        }
-                    } else {
-                        if y < 139 && x < 146 {
-                            mode=Mode::Home;
-                            api.send(b"ha2H");
-                            redraw=true;
-                        } else if (230..280).contains(&y) {
-                            if x < 230 {
-                                if query_len<INPUT_MAX {
-                                    query[query_len]=LETTERS[letter];
-                                    query_len+=1;
-                                    if mode==Mode::Search {
-                                        send_word(api,b'Q',&query,query_len);
-                                    }
-                                }
-                            } else if query_len>0 {
-                                query_len-=1;
-                                if mode==Mode::Search { send_word(api,b'Q',&query,query_len); }
-                            }
-                            redraw=true;
-                        } else if y>=383 {
-                            if mode==Mode::Search {
-                                if x<230 {
-                                    mode=Mode::Home;
-                                    api.send(b"ha2H");
-                                } else {
-                                    send_word(api,b'Q',&query,query_len);
-                                }
-                            } else {
-                                if x<230 {
-                                    api.send(b"ha2V");
-                                    answer_len=0;
-                                } else if query_len>0 {
-                                    send_word(api,b'T',&query,query_len);
-                                    answer_len=0;
-                                }
-                            }
-                            redraw=true;
-                        } else if mode==Mode::Search && (287..380).contains(&y) {
-                            let index=((y-287)/31) as usize;
-                            if index<results.count {
-                                let tile=results.tiles[index];
-                                if tile.flags & 1 != 0 {
-                                    // Keep lock actions on phone; watch search only controls non-lock entities.
-                                    let action=if tile.flags & 2 == 0 { b'U' } else { b'D' };
-                                    if api.send(&[b'h',b'a',b'2',action,index as u8])==0 {
-                                        pending=Some(index);
-                                        received=now;
-                                    }
-                                }
-                            }
+                },
+                CROWN if !paused && mode!=Mode::Categories => {
+                    if now.wrapping_sub(last_turn)>300 {
+                        send_page(api,event.delta>0);
+                        last_turn=now;
+                    }
+                },
+                TOUCH_DOWN if !paused=>{
+                    down=Some((event.x as i32,event.y as i32));
+                },
+                TOUCH_UP if !paused=>{
+                    let end_x=event.x as i32;
+                    let end_y=event.y as i32;
+                    if let Some((start_x,start_y))=down.take(){
+                        let dx=end_x-start_x;
+                        let dy=end_y-start_y;
+                        if dx.abs()>=60 && dy.abs()<105 &&
+                                (mode==Mode::Home||mode==Mode::Results) {
+                            send_page(api,dx<0);
+                        }else if dx.abs()<35 && dy.abs()<35 {
+                            redraw=handle_tap(api,end_x,end_y,&mut mode,
+                                    &home,&results,&mut selected,
+                                    &mut waiting,&mut confirming,&mut confirmed_at,now);
                         }
                     }
-                }
-                _ => {}
+                },
+                _=>{}
             }
         }
-        if paused { continue; }
-        while let Some(data)=api.recv(&mut message) {
-            if let Some(values)=data.strip_prefix(b"ha2Y") {
-                let n=core::cmp::min(values.len(),answer.len());
-                answer[..n].copy_from_slice(&values[..n]);
-                answer_len=n;
-                received=now;
-                redraw=true;
-                continue;
-            }
-            if let Some(values)=data.strip_prefix(b"ha2A").or_else(||data.strip_prefix(b"ha2S")) {
-                if let Some(snapshot)=Screen::parse(values) {
-                    if mode==Mode::Search {
-                        results=snapshot;
-                    } else {
-                        let same_page=screen.page==snapshot.page &&
-                                screen.pages==snapshot.pages && screen.room==snapshot.room;
-                        screen=snapshot;
-                        if !same_page { confirmation=None; }
+        if paused {continue;}
+        while let Some(message)=api.recv(&mut inbox){
+            let payload=message.strip_prefix(b"ha2S")
+                    .or_else(||message.strip_prefix(b"ha2A"));
+            if let Some(data)=payload {
+                if let Some(next)=Screen::parse(data){
+                    if mode==Mode::Results {
+                        if next!=results { results=next;redraw=true; }
+                    }else{
+                        if next!=home {
+                            if next.page!=home.page {confirming=None;}
+                            home=next;redraw=true;
+                        }
                     }
-                    pending=None;
-                    offline=false;
-                    received=now;
-                    redraw=true;
+                    if waiting.is_some() {waiting=None;redraw=true;}
+                    if offline {offline=false;redraw=true;}
+                    last_data=now;
                 }
             }
         }
-        if confirmation.is_some()&&now.wrapping_sub(confirmed_at)>5000 {
-            confirmation=None;
-            redraw=true;
+        if confirming.is_some() && now.wrapping_sub(confirmed_at)>=5000 {
+            confirming=None;redraw=true;
         }
-        if now.wrapping_sub(received)>=15000 {
-            if !offline { redraw=true; }
-            offline=true;
-            pending=None;
-            confirmation=None;
+        if now.wrapping_sub(last_data)>=16000 && !offline {
+            offline=true;waiting=None;confirming=None;redraw=true;
         }
-        if (now.wrapping_sub(next_poll) as i32)>=0 {
-            if pending.is_none()&&mode==Mode::Home { api.send(b"ha2R"); }
-            next_poll=now.wrapping_add(4000);
+        if now.wrapping_sub(next_poll)>=5000 || now==next_poll {
+            if mode==Mode::Home {
+                let _=api.send(b"ha2R");
+            }
+            next_poll=now;
         }
         if redraw {
-            render(api,&screen,&results,mode,&query,query_len,letter,
-                    &answer,answer_len,pending,confirmation,offline);
+            // Avoid erasing and presenting an identical frame for periodic snapshots.
+            render(api,&home,&results,mode,selected,waiting,confirming,offline);
+            last_render=now;
         }
     }
 }
