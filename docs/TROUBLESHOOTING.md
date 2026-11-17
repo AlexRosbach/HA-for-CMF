@@ -41,7 +41,7 @@ The app avoids redraws for identical snapshots, but some custom loaders and BLE 
 ## Home Assistant errors
 
 - Use a reachable URL and a valid long-lived access token.
-- Prefer HTTPS for external access; verify TLS/certificates.
+- **HTTPS is mandatory in v0.7+.** Plain HTTP URLs, including LAN IP addresses, are rejected to protect the HA token. Set up TLS and use a certificate your phone trusts.
 - Ensure the selected entity exists and its state is not `unavailable`.
 - Older Home Assistant versions or restricted template API access may not expose room assignments.
 
