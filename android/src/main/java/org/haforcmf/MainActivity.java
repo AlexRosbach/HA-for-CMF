@@ -241,12 +241,12 @@ public final class MainActivity extends Activity {
 
     private boolean bluetoothAllowed() {
         var needed = new ArrayList<String>();
-        for (String p : new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT}) {
+        for (String p : new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.ACCESS_FINE_LOCATION}) {
             if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) needed.add(p);
         }
         if (needed.isEmpty()) return true;
         requestPermissions(needed.toArray(String[]::new), 1);
-        toast("Grant Nearby devices, then try again.");
+        toast("Bluetooth- und Standortberechtigung erlauben und erneut suchen.");
         return false;
     }
 
