@@ -911,7 +911,7 @@ public final class MainActivity extends Activity {
 
     private void startBridge() {
         if (!bluetoothAllowed()) return;
-        if (address == null || ids.isEmpty()) { toast("Bitte Uhr und Favoriten auswählen."); return; }
+        if (address == null) { toast("Bitte zuerst die Uhr auswählen."); return; }
         try {
             new Home(url.getText().toString(), token.getText().toString());
             persistSettings();
