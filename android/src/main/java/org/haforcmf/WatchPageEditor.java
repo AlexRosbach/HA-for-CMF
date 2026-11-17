@@ -114,7 +114,7 @@ final class WatchPageEditor {
     private void refresh(){
         if(active>=pages.pages.size())active=pages.pages.size()-1;
         heading.setText(page().title);
-        counter.setText("Seite "+(active+1)+" von "+pages.pages.size());
+        counter.setText(LocaleKit.t(activity,"Seite "+(active+1)+" von "+pages.pages.size()));
         preview.setPage(page(),active,pages.pages.size());
         slots.removeAllViews();
         for(int i=0;i<WatchPages.SLOTS;i++){
