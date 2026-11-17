@@ -6,6 +6,10 @@ Show up to four Home Assistant entities on a CMF Watch Pro 2. Tap a light or swi
 
 The Android phone loads the entity list from Home Assistant and talks to the watch over Bluetooth LE. The phone is the bridge, including while the screen is locked if the foreground service stays connected. The watch does not need the Home Assistant token.
 
+## v0.5 design and implementation plan
+
+The complete [v0.5 UI/UX and technical implementation specification](docs/V0.5_IMPLEMENTATION_SPEC.md) covers the approved Android/watch mockups, accessible contrast, room/entity navigation, searchable entities directly on the watch, secure door controls and a realistic Home Assistant Assist integration. **This is a plan, not an implemented v0.5 release.**
+
 ## Connect on Android
 
 1. Your watch must already have the [WP2 Apps firmware and loader](https://github.com/cmf-tech-community/wp2-apps). The Android app installs or updates only the bundled HA for CMF watch app. It does not flash firmware.
