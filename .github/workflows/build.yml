@@ -49,13 +49,16 @@ jobs:
           export ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
           export ANDROID_BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           bash android/build.sh
+      - name: Stage Android and watch packages
+        run: |
+          mkdir -p release-assets
+          cp android/.build/ha-for-cmf-android.apk release-assets/
+          cp .build/ha-for-cmf.wp2app release-assets/
       - name: Archive installable test APK and watch package
         uses: actions/upload-artifact@v4
         with:
           name: ha-for-cmf-ci-packages
-          path: |
-            android/.build/ha-for-cmf-android.apk
-            .build/ha-for-cmf.wp2app
+          path: release-assets/
           if-no-files-found: error
   release:
     name: Publish experimental release
