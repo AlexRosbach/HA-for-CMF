@@ -223,6 +223,7 @@ fn handle_tap(api: &Api, x: i32, y: i32, mode: &mut Mode,
             if *mode==Mode::Results {
                 *mode=Mode::Categories;
                 *confirming=None;
+                let _=api.send(b"ha2H");
                 return true;
             }
             *mode=Mode::Categories;
