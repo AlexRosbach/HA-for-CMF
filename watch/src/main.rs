@@ -119,8 +119,8 @@ fn render(mut api: &Api, screen: &Screen,
         let (x, y) = tile_origin(index, screen.count);
         let lit = !offline && tile.flags & 2 != 0;
 
-        let fill = if lit { ORANGE } else { CARD };
-        let foreground = if lit { BG } else { INK };
+        let fill = if confirmation == Some(index) { CARD } else if lit { ORANGE } else { CARD };
+        let foreground = if confirmation == Some(index) { INK } else if lit { BG } else { INK };
         draw::rrect(&mut api, x, y, TILE_W, TILE_H, 21, fill, BG);
         let title = if confirmation == Some(index) && tile.flags & 4 != 0 {
             if tile.flags & 2 == 0 { "UNLOCK?" } else { "LOCK?" }
@@ -217,9 +217,11 @@ fn main(api: &'static Api) -> i32 {
                 if pending.is_none() { data.strip_prefix(b"ha2S") } else { None }
             }) {
                 if let Some(snapshot) = Screen::parse(values) {
+                    let same_page = screen.page == snapshot.page && screen.pages == snapshot.pages
+                        && screen.room == snapshot.room;
                     screen = snapshot;
                     pending = None;
-                    confirmation = None;
+                    if !same_page { confirmation = None; }
                     offline = false;
                     received = now;
                 }
