@@ -36,7 +36,7 @@ HA for CMF is an **experimental, community-developed** Android companion and cus
 
 ## Screenshots — actual app, anonymised
 
-![HA for CMF Android screenshots: rooms, searchable entities, editable watch page preview and bridge settings](docs/screenshots/readme-ui-redacted.jpg)
+![HA for CMF Android screenshots: rooms, searchable entities, editable watch page preview and bridge settings](docs/screenshots/readme-ui-redacted.webp)
 
 <sub>Actual Android v0.6 screens provided during testing, cropped and anonymised for public documentation. Original Home Assistant entity IDs, Bluetooth MAC addresses, device-specific names and notification/status-bar content have been replaced with **example values**. These captures are **not** a claim that v0.7 light/dark modes or watch hardware have been validated. See [screenshot policy](docs/SCREENSHOTS.md).</sub>
 
