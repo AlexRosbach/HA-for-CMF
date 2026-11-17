@@ -35,3 +35,7 @@ The Android manifest currently allows cleartext HTTP for private LAN Home Assist
 ## Data deletion
 
 Uninstall the app to remove its local settings. To revoke access immediately, **delete its long-lived token in Home Assistant**. Uninstalling the app does not automatically revoke a Home Assistant token at the server.
+
+## Transport security (v0.7+)
+
+Only `https://` Home Assistant URLs are accepted. Android cleartext HTTP traffic is disabled to avoid sending a bearer token without TLS. Use a trusted certificate; do not bypass certificate validation. This is a breaking change for older `http://192.168.x.x:8123` setups, which must be migrated to HTTPS before upgrading.
