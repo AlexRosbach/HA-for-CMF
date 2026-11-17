@@ -16,8 +16,6 @@ import java.util.Set;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Intent;
-import android.speech.RecognizerIntent;
-import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
 import android.os.*;
 import android.text.*;
@@ -46,10 +44,8 @@ public final class MainActivity extends Activity {
     private LinearLayout[] pages;
     private TextView[] tabLabels;
     private ScrollView screenScroll;
-    private EditText voiceText, agentInput;
-    private TextView voiceResult;
-    private String conversationId = "";
-    private final int speechCode = 42;
+    private WatchPages watchPages;
+    private WatchPageEditor watchEditor;
     private LinearLayout quickActions;
     private Spinner roomPicker;
     private Home.Catalog catalog;
@@ -183,6 +179,20 @@ public final class MainActivity extends Activity {
         info.setTextColor(UiKit.MUTED);
         info.setTextSize(14);
 
+        watchPages=WatchPages.load(this,ids,favoriteRooms);
+        watchEditor=new WatchPageEditor(this,watchPage,watchPages,new WatchPageEditor.Host(){
+            @Override public void changed(WatchPages changed){
+                changed.save(MainActivity.this);
+                ids.clear();
+                ids.addAll(changed.uniqueEntities());
+                selected.setText(ids.size()+" Favoriten auf "+changed.pages.size()+" Seiten");
+                persistSettings();
+                BridgeService.notifyPagesChanged();
+            }
+            @Override public void fetchCatalog(java.util.function.Consumer<Home.Catalog> callback){
+                loadCatalogForEditor(callback);
+            }
+        });
         UiKit.title(this,watchPage,"Uhr verbinden","Deine CMF Watch Pro 2 einrichten.");
         var connection=card(watchPage);
         var watchTitle=text(connection,"CMF Watch Pro 2");
@@ -238,50 +248,6 @@ public final class MainActivity extends Activity {
         var note=text(homeCard,"Token in Home Assistant → Profil → Sicherheit "
                 +"→ Langlebige Zugriffstoken erstellen.");
         note.setTextColor(UiKit.MUTED);note.setTextSize(13);
-
-        UiKit.title(this,settingsPage,"Voice Assistant",
-                "Assistent auf dem Handy auswählen. Keine Uhren-Mikrofonaufnahme.");
-        var voiceCard=card(settingsPage);
-        agentInput=UiKit.field(this,voiceCard,"Home Assistant Agent-ID (optional)",
-                "Leer = Standardassistent",SettingsStore.load(this,"agent"),InputType.TYPE_CLASS_TEXT);
-        TextView selectionTitle=UiKit.label(this,"ASSISTENT WÄHLEN",13,true,UiKit.INK);
-        voiceCard.addView(selectionTitle);
-        Spinner agentPreset=new Spinner(this);
-        String[] assistants={"Home Assistant Assist (Standard)",
-                "Home Assistant integrierter Agent",
-                "OpenAI / anderer Agent über Home Assistant"};
-        var presetAdapter=new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_dropdown_item,assistants){
-            @Override public View getView(int position,View recycled,android.view.ViewGroup parent){
-                TextView view=(TextView)super.getView(position,recycled,parent);
-                view.setTextColor(UiKit.INK);
-                return view;
-            }
-        };
-        agentPreset.setAdapter(presetAdapter);
-        voiceCard.addView(agentPreset,new LinearLayout.LayoutParams(-1,dp(54)));
-        String initialAgent=agentInput.getText().toString();
-        agentPreset.setSelection(initialAgent.isBlank()?0:
-                initialAgent.equals("conversation.home_assistant")?1:2);
-        agentPreset.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-            public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
-                if(position==0)agentInput.setText("");
-                else if(position==1)agentInput.setText("conversation.home_assistant");
-            }
-            public void onNothingSelected(android.widget.AdapterView<?> parent){}
-        });
-        var agentHint=text(voiceCard,"Beispiel: conversation.home_assistant. "
-                +"Andere Agenten müssen in Home Assistant eingerichtet sein.");
-        agentHint.setTextColor(UiKit.MUTED);agentHint.setTextSize(13);
-        voiceText=UiKit.field(this,voiceCard,"Nachricht an den Assistenten",
-                "z. B. Wie warm ist das Wohnzimmer?","",InputType.TYPE_CLASS_TEXT);
-        button(voiceCard,"🎙  Am Handy sprechen",this::startSpeech);
-        button(voiceCard,"Nachricht senden",()->askAssistant(voiceText.getText().toString()));
-        voiceResult=text(voiceCard,"Home Assistant Assist · Bereit");
-        voiceResult.setTextColor(UiKit.INK);
-        var limitation=text(voiceCard,"Die Uhr kann eine Anfrage anstoßen und Text anzeigen. "
-                +"Direkte Uhren-Audioaufnahme wird vom aktuellen Loader nicht unterstützt.");
-        limitation.setTextSize(13);limitation.setTextColor(UiKit.MUTED);
 
         UiKit.title(this,settingsPage,"Sicherheit",
                 "Türöffner und Schlösser werden nur nach Bestätigung auf dem Handy ausgeführt.");
@@ -368,58 +334,39 @@ public final class MainActivity extends Activity {
         }
         SettingsStore.save(this,"favorites",String.join(",",ids));
         SettingsStore.save(this,"watch_address",address==null?"":address);
-        if(agentInput!=null)SettingsStore.save(this,"agent",agentInput.getText().toString());
     }
 
     private void showFavorites(){
-        if(ids.isEmpty()){
-            new AlertDialog.Builder(this).setTitle("Favoriten fehlen")
-                    .setMessage("Suche nach Geräten und füge deine Favoriten für die Uhr hinzu.")
-                    .setNegativeButton("Abbrechen",null)
-                    .setPositiveButton("Entitäten öffnen",(d,w)->chooseEntities()).show();
-            return;
-        }
-        String[] options=new String[ids.size()];
-        for(int i=0;i<ids.size();i++){
-            String id=ids.get(i), label=id;
-            if(catalog!=null){
-                for(Home.Entity e:catalog.entities()){
-                    if(e.id().equals(id)){label=e.label()+" · "+e.areaName();break;}
-                }
+        showTab(2);
+        Toast.makeText(this,"Favoritenseiten in der Vorschau bearbeiten.",Toast.LENGTH_LONG).show();
+    }
+
+    private void loadCatalogForEditor(java.util.function.Consumer<Home.Catalog> callback){
+        if(catalog!=null){ callback.accept(catalog); return; }
+        final Home home;
+        try{home=new Home(url.getText().toString(),token.getText().toString());}
+        catch(Exception ex){callback.accept(null);return;}
+        new Thread(()->{
+            try{
+                Home.Catalog loaded=home.catalog();
+                runOnUiThread(()->{
+                    if(isDestroyed())return;
+                    catalog=loaded;
+                    if(watchEditor!=null)watchEditor.setCatalog(loaded);
+                    callback.accept(loaded);
+                });
+            }catch(Exception ex){
+                runOnUiThread(()->{
+                    Toast.makeText(this,"Entitäten konnten nicht geladen werden: "+
+                            ex.getMessage(),Toast.LENGTH_LONG).show();
+                    callback.accept(null);
+                });
             }
-            options[i]=(i+1)+".  "+label;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Uhr-Favoriten · "+ids.size()+"/24")
-                .setItems(options,(dialog,index)->{
-                    String entityId=ids.get(index);
-                    new AlertDialog.Builder(this)
-                        .setTitle(options[index])
-                        .setItems(new String[]{"↑  Nach oben","↓  Nach unten","✕  Entfernen"},
-                            (d,action)->{
-                                if(action==0 && index>0){
-                                    java.util.Collections.swap(ids,index,index-1);
-                                }else if(action==1 && index<ids.size()-1){
-                                    java.util.Collections.swap(ids,index,index+1);
-                                }else if(action==2){
-                                    ids.remove(entityId);
-                                }
-                                selected.setText(ids.size()+" Favoriten für die Uhr");
-                                persistSettings();
-                                showFavorites();
-                            }).show();
-                })
-                .setNeutralButton("Hinzufügen",(d,w)->chooseEntities())
-                .setPositiveButton("Fertig",null).show();
+        },"Load Watch Preview Catalog").start();
     }
 
     private void handleWatchIntent(Intent intent) {
         if(intent==null)return;
-        if(intent.getBooleanExtra("watch_voice",false)) {
-            showTab(3);
-            voiceResult.setText("Uhr-Anfrage: Bitte am Handy auf \"Sprechen\" tippen.");
-            intent.removeExtra("watch_voice");
-        }
         String lockId=intent.getStringExtra("watch_lock_id");
         if(lockId!=null && !lockId.isBlank()) {
             String name=intent.getStringExtra("watch_lock_title");
@@ -443,56 +390,10 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void startSpeech(){
-        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"de-DE");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Mit Home Assistant sprechen");
-        try {startActivityForResult(intent,speechCode);}
-        catch(ActivityNotFoundException e){
-            toast("Keine Android-Spracherkennung installiert. Bitte Texteingabe nutzen.");
-        }
-    }
-
-    @Override protected void onActivityResult(int request,int result,Intent data){
-        super.onActivityResult(request,result,data);
-        if(request==speechCode && result==RESULT_OK && data!=null){
-            ArrayList<String> recognized=data.getStringArrayListExtra(
-                    RecognizerIntent.EXTRA_RESULTS);
-            if(recognized!=null && !recognized.isEmpty()){
-                voiceText.setText(recognized.get(0));
-                askAssistant(recognized.get(0));
-            }
-        }
-    }
-
     @Override protected void onNewIntent(Intent intent){
         super.onNewIntent(intent);
         setIntent(intent);
         handleWatchIntent(intent);
-    }
-
-    private void askAssistant(String phrase){
-        if(voiceResult==null)return;
-        persistSettings();
-        final Home home;
-        try{home=new Home(url.getText().toString(),token.getText().toString());}
-        catch(Exception ex){voiceResult.setText("Bitte zuerst Home Assistant verbinden.");return;}
-        voiceResult.setText("Assistent antwortet …");
-        String agent=agentInput.getText().toString();
-        new Thread(()->{
-            try{
-                var reply=home.converse(phrase,agent,conversationId);
-                runOnUiThread(()->{
-                    if(isDestroyed())return;
-                    conversationId=reply.conversationId();
-                    voiceResult.setText(reply.text());
-                });
-            }catch(Exception ex){
-                runOnUiThread(()->voiceResult.setText("Fehler: "+ex.getMessage()));
-            }
-        },"HA Assist").start();
     }
 
     private TextView text(LinearLayout parent,String value) {
@@ -527,9 +428,16 @@ public final class MainActivity extends Activity {
                     for (Home.Entity entity : result.entities()) {
                         favoriteRooms.put(entity.id(), entity.areaName());
                     }
+                    if(watchEditor!=null)watchEditor.setCatalog(result);
                     EntityBrowser.show(this, result, ids, chosen -> {
+                        if(watchPages!=null){
+                            watchPages.reconcile(chosen);
+                            watchPages.save(this);
+                            BridgeService.notifyPagesChanged();
+                        }
                         ids.clear();
-                        ids.addAll(chosen);
+                        ids.addAll(watchPages==null?chosen:watchPages.uniqueEntities());
+                        if(watchEditor!=null)watchEditor.refreshFromConfig();
                         selected.setText(chosen.isEmpty() ? "Keine Favoriten ausgewählt"
                                 : chosen.size() + " Favoriten für die Uhr ausgewählt");
                         persistSettings();
@@ -581,6 +489,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     catalog = result;
+                    if(watchEditor!=null)watchEditor.setCatalog(result);
                     persistSettings();
                     for (Home.Entity entity : result.entities()) {
                         favoriteRooms.put(entity.id(), entity.areaName());
@@ -919,7 +828,6 @@ public final class MainActivity extends Activity {
                     .putExtra("url", url.getText().toString()).putExtra("token", token.getText().toString())
                     .putExtra("address", address)
                     .putExtra("entities", ids.toArray(String[]::new))
-                    .putExtra("voice_agent",agentInput==null?"":agentInput.getText().toString())
                     .putExtra("rooms", ids.stream()
                             .map(id -> favoriteRooms.getOrDefault(id, "Favoriten"))
                             .toArray(String[]::new)));
