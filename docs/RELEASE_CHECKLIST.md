@@ -5,6 +5,8 @@ This project is already publicly visible on GitHub. **Do not mark a release stab
 ## Before tagging
 
 - [ ] Merge only reviewed changes with green Android and Rust builds.
+- [ ] Check README screenshots use only anonymised demo data, no device MAC addresses, personal HA URLs, notifications or real entity IDs.
+- [ ] Confirm plain HTTP is rejected (HTTPS required) and there is no certificate-validation bypass.
 - [ ] Confirm build logs and artifacts contain **no HA tokens, personal URLs, Bluetooth MAC addresses, private keys or sensitive screenshots**.
 - [ ] Test *English* and *Deutsch* including settings, entity browser, watch page editor, dialogs and watch UI.
 - [ ] Test System, Light and Dark theme on Android (including dialogs, keyboard, status bar) and the round watch UI.
