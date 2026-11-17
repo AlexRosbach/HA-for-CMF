@@ -2,3 +2,22 @@
 __pycache__/
 .env
 .env.*
+
+# Local signing credentials and sensitive exports
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+*token*.txt
+*secret*.json
+android/local.properties
+*.apk
+*.aab
+*.wp2app
+*.log
+.DS_Store
+.idea/
+.vscode/
