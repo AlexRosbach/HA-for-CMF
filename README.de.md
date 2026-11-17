@@ -23,7 +23,7 @@ HA for CMF ist ein **experimentelles Open-Source-Projekt** aus einer Android-App
 
 ## Schnellstart
 
-1. **CMF Watch Pro 2 mit kompatiblem WP2 Apps Loader** vorbereiten. Android 12+ und Home Assistant mit erreichbarere API bereitstellen.
+1. **CMF Watch Pro 2 mit kompatiblem WP2 Apps Loader** vorbereiten. Android 12+ und Home Assistant mit erreichbarer API bereitstellen.
 2. Passende **APK** und **.wp2app** derselben Version von [Releases](https://github.com/AlexRosbach/HA-for-CMF/releases) herunterladen.
 3. Android-App installieren und unter **Einstellungen** Home-Assistant-URL und persönlichen Zugriffstoken eintragen. Sprache und Design auswählen.
 4. Im Bereich **Uhr** nach der Uhr suchen, die App auf der Uhr installieren und Seiten in der Vorschau gestalten.
