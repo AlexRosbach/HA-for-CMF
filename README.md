@@ -6,16 +6,38 @@ Show up to four Home Assistant entities on a CMF Watch Pro 2. Tap a light or swi
 
 The Android phone loads the entity list from Home Assistant and talks to the watch over Bluetooth LE. The phone is the bridge, including while the screen is locked if the foreground service stays connected. The watch does not need the Home Assistant token.
 
+## v0.5.0 – New Android UI, watch search and phone Assist (experimental)
+
+**What's implemented**
+- Four phone tabs: **Zuhause, Entitäten, Uhr, Einstellungen** in a high-contrast light CMF design.
+- Fullscreen entity search (name, ID, room, state), sorting, room/type/available/favorites filters and up to 24 watch favorites. Favorites can be reordered in **Entitäten → Favoriten für die Uhr**.
+- HA room dashboard and live switch/light control including brightness when supported.
+- Settings for Home Assistant URL, long-lived token, and assistant agent. Connection, favorites and assistant ID are encrypted at rest using an AndroidKeyStore AES-GCM key (uninstall clears them).
+- Watch search: select **SUCHE** on the watch; turn the crown to choose a letter, tap it to append, use **LOESCHEN** to correct, and tap a result to control an actionable entity. Search queries the phone's Home Assistant catalogue, not just the 24 favorites.
+- Watch Assistant: **ASSIST** → type a text question using the crown and press **FRAGEN**, or select **AM HANDY** to post a notification. Tap that notification and speak on the phone. The selected HA conversation agent handles the command and sends text back to the watch.
+- Watch lock/unlock requests **never execute from BLE alone**: the phone displays a required notification and confirmation dialog. Physical door unlatching remains phone-only.
+
+**Important limitations**
+- The CMF Watch Pro 2 Custom App SDK has no verified microphone-audio API. You cannot dictate into the watch app; voice input is done with Android's speech recognizer on the phone.
+- Custom agents (including an OpenAI-backed agent) must already be configured in your Home Assistant instance. A ChatGPT subscription is not an OpenAI API key, and the native Google Assistant app is not a HA conversation agent.
+- The UI follows the approved mockups in colors, hierarchy and navigation, but is **not pixel-perfect**; the Android implementation still uses native Java views, not Jetpack Compose. No real-watch screenshots or physical BLE test have been completed.
+- Install **both** v0.5 Android and watch packages. The watch requires a compatible WP2 Apps loader. The APK is test-signed in CI, so you may need to uninstall v0.4 before installing v0.5.
+- Real hardware/device behavior has not been verified; this release must stay a **prerelease**.
+
+**Setup:** On the phone open **Einstellungen**, enter your HA URL/token, test and load rooms. Open **Entitäten** to choose favorites, then **Uhr** to connect and install the watch app. Start the Bridge. On the watch choose **SUCHE** or **ASSIST** from the bottom navigation.
+
+See the [v0.5 implementation specification](docs/V0.5_IMPLEMENTATION_SPEC.md) for planned follow-up improvements and accessibility test criteria.
+
 ## v0.5 design and implementation plan
 
-The complete [v0.5 UI/UX and technical implementation specification](docs/V0.5_IMPLEMENTATION_SPEC.md) covers the approved Android/watch mockups, accessible contrast, room/entity navigation, searchable entities directly on the watch, secure door controls and a realistic Home Assistant Assist integration. **This is a plan, not an implemented v0.5 release.**
+The complete [v0.5 UI/UX and technical implementation specification](docs/V0.5_IMPLEMENTATION_SPEC.md) covers the approved Android/watch mockups, accessible contrast, room/entity navigation, searchable entities directly on the watch, secure door controls and a realistic Home Assistant Assist integration. **This remains the full design specification; implemented functionality is described in the v0.5 release section above.**
 
 ## Connect on Android
 
 1. Your watch must already have the [WP2 Apps firmware and loader](https://github.com/cmf-tech-community/wp2-apps). The Android app installs or updates only the bundled HA for CMF watch app. It does not flash firmware.
 2. Download the Android APK from [Releases](https://github.com/AlexRosbach/HA-for-CMF/releases), install it on Android 12 or later, and open **HA for CMF**.
-3. Open your Home Assistant profile. Under **Security → Long-lived access tokens**, create a token for the app. Use an HTTPS URL on untrusted networks. Do not share the token. The Android app keeps it in memory for the active session.
-4. In HA for CMF, enter the URL and token. Tap **Geräte auswählen (max. 4)**, search by friendly name or entity ID, and select one to four entries. The order in which you select them becomes their order on the watch.
+3. Open your Home Assistant profile. Under **Security → Long-lived access tokens**, create a token for the app. Use an HTTPS URL on untrusted networks. Do not share the token. Starting with v0.5, the Android app stores credentials encrypted with AndroidKeyStore until you uninstall the app.
+4. In HA for CMF, enter the URL and token. Open **Entitäten**, tap **Alle Entitäten durchsuchen**, search/filter and choose up to 24 favourites. The order in which you select them becomes their order on the watch.
 5. Close competing watch apps, such as Nothing X, or disconnect them from the watch. Keep the phone's Bluetooth on. In HA for CMF tap **Uhr suchen**, allow Nearby devices, and select your Watch Pro 2 from the live Bluetooth list. The list also includes bonded and unnamed BLE devices because some watches do not advertise their full retail name.
 6. Exit any open WP2 app on the watch. On the phone tap **Install or update watch app**. Wait for success, then dismiss the watch's **Paired** notification if shown.
 7. Tap **Bridge starten**. When the phone says it is ready, dismiss the watch's **Paired** prompt and open **Custom Apps → ha-for-cmf**. Use **Bridge stoppen** to end the Bluetooth session or before changing the selection.
